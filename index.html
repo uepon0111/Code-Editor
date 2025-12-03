@@ -1,0 +1,1215 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced HTML Editor v3 (Auto-Save & Highlight)</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-html.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-css.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+
+    <style>
+        :root {
+            --bg-color: #1e1e1e;
+            --sidebar-bg: #252526;
+            --text-color: #d4d4d4;
+            --accent-color: #007acc;
+            --border-color: #3e3e42;
+            --highlight-bg: #f1c40f;
+            --tab-inactive-bg: #2d2d2d;
+            --tab-active-bg: #1e1e1e;
+            --icon-color: #cccccc;
+            --danger-color: #d32f2f;
+            --success-color: #388e3c;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* --- Zen Mode (UI Hidden) --- */
+        body.zen-mode header,
+        body.zen-mode .file-tab-bar {
+            display: none !important;
+        }
+
+        /* --- SVG Icons --- */
+        .icon {
+            width: 16px;
+            height: 16px;
+            fill: currentColor;
+            vertical-align: middle;
+        }
+
+        /* --- File Tabs --- */
+        .file-tab-bar {
+            background-color: var(--sidebar-bg);
+            display: flex;
+            align-items: center;
+            overflow-x: auto;
+            border-bottom: 1px solid var(--border-color);
+            height: 35px;
+            flex-shrink: 0; /* Zen mode logic safeguard */
+        }
+        
+        .file-tab {
+            padding: 0 10px;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            background-color: var(--tab-inactive-bg);
+            color: #888;
+            border-right: 1px solid var(--border-color);
+            cursor: pointer;
+            font-size: 0.85rem;
+            min-width: 100px;
+            justify-content: space-between;
+            user-select: none;
+        }
+
+        .file-tab.active {
+            background-color: var(--tab-active-bg);
+            color: var(--text-color);
+            border-top: 2px solid var(--accent-color);
+        }
+
+        .file-tab-close {
+            margin-left: 8px;
+            border-radius: 50%;
+            padding: 2px;
+            font-size: 12px;
+            line-height: 1;
+            opacity: 0.7;
+        }
+        .file-tab-close:hover { background-color: #444; opacity: 1; }
+
+        .add-tab-btn {
+            background: none;
+            border: none;
+            color: var(--text-color);
+            font-size: 1.2rem;
+            padding: 0 10px;
+            cursor: pointer;
+        }
+        .add-tab-btn:hover { color: white; }
+
+        /* --- Header & View Mode Tabs --- */
+        header {
+            background-color: var(--bg-color);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 40px;
+            padding: 0 10px;
+            flex-shrink: 0;
+        }
+
+        .view-controls {
+            display: flex;
+            height: 100%;
+        }
+
+        .view-tab {
+            padding: 0 15px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            color: #888;
+            font-size: 0.85rem;
+            border-bottom: 2px solid transparent;
+            height: 100%;
+        }
+
+        .view-tab.active {
+            color: var(--text-color);
+            border-bottom-color: var(--accent-color);
+            font-weight: bold;
+        }
+
+        /* --- Main Layout --- */
+        .main-container {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* --- View Sections --- */
+        .view-section {
+            display: none;
+            flex: 1;
+            flex-direction: column;
+            height: 100%;
+            position: relative;
+            overflow: hidden;
+        }
+        .view-section.active { display: flex; }
+
+        /* --- Editor Area --- */
+        .editor-wrapper {
+            flex: 1;
+            display: flex;
+            position: relative;
+            overflow: hidden;
+            background-color: var(--bg-color);
+        }
+
+        /* Line Numbers */
+        .line-numbers {
+            width: 45px;
+            background-color: var(--bg-color);
+            color: #6e7681;
+            text-align: right;
+            padding: 10px 5px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+            border-right: 1px solid var(--border-color);
+            user-select: none;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+
+        /* Code Container */
+        .code-container {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .code-font-style {
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+            padding: 10px;
+            margin: 0;
+            white-space: pre;
+            overflow-wrap: normal;
+            word-wrap: normal;
+        }
+
+        /* Backdrop (Syntax Highlight) */
+        .backdrop {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            pointer-events: none;
+            overflow: hidden;
+            color: var(--text-color);
+            /* Fallback */
+        }
+        
+        /* Prism overrides */
+        pre[class*="language-"] { margin: 0; padding: 0; background: transparent; overflow: visible; }
+        code[class*="language-"] { white-space: pre; }
+
+        .backdrop mark {
+            background-color: rgba(255, 255, 0, 0.3);
+            color: transparent;
+            border-radius: 2px;
+        }
+        .backdrop mark.current {
+            background-color: rgba(255, 165, 0, 0.6);
+            border: 1px solid orange;
+        }
+
+        /* Textarea (Overlay) */
+        textarea#codeEditor {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: transparent;
+            /* Transparent Text so backdrop shows through */
+            color: transparent;
+            caret-color: white; 
+            border: none;
+            resize: none;
+            outline: none;
+            z-index: 2;
+            overflow: auto;
+        }
+        
+        /* Ensure selection is visible even with transparent text */
+        textarea#codeEditor::selection {
+            background-color: rgba(38, 79, 120, 0.5);
+            color: transparent;
+        }
+
+        /* Toolbar */
+        .toolbar {
+            padding: 6px 10px;
+            background-color: var(--sidebar-bg);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            height: 40px;
+        }
+
+        /* --- Preview Section --- */
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            background-color: white;
+            flex: 1;
+        }
+
+        /* --- Search Box --- */
+        .search-panel {
+            display: none;
+            background: #252526;
+            padding: 6px 10px;
+            border-bottom: 1px solid var(--border-color);
+            align-items: center;
+            gap: 5px;
+        }
+        .search-panel.active { display: flex; flex-wrap: wrap; }
+
+        /* --- Sidebar (History & Trash) --- */
+        .history-sidebar {
+            width: 300px;
+            background-color: var(--sidebar-bg);
+            border-left: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            z-index: 100;
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+            box-shadow: -2px 0 5px rgba(0,0,0,0.5);
+        }
+        .history-sidebar.open { transform: translateX(0); }
+
+        .history-controls {
+            padding: 10px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        /* Trash/History Tabs */
+        .sidebar-tabs {
+            display: flex;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 5px;
+        }
+        .sidebar-tab {
+            flex: 1;
+            text-align: center;
+            padding: 8px 0;
+            cursor: pointer;
+            font-size: 0.85rem;
+            color: #888;
+            background: #2d2d2d;
+        }
+        .sidebar-tab.active {
+            background: var(--sidebar-bg);
+            color: var(--text-color);
+            border-top: 2px solid var(--accent-color);
+            font-weight: bold;
+        }
+
+        .history-list {
+            flex: 1;
+            overflow-y: auto;
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .history-item {
+            padding: 10px;
+            border-bottom: 1px solid var(--border-color);
+            cursor: pointer;
+        }
+        .history-item:hover { background-color: #37373d; }
+        .history-item.pinned { border-left: 3px solid var(--accent-color); background-color: #2d2d30; }
+        .history-title { font-weight: bold; margin-bottom: 4px; display: block; font-size: 0.9rem;}
+        .history-meta { font-size: 0.75rem; color: #888; display: flex; justify-content: space-between; align-items: center; }
+
+        /* --- UI Elements --- */
+        button {
+            background-color: var(--accent-color);
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+        button:hover { opacity: 0.9; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        button.secondary { background-color: #444; }
+        button.danger { background-color: var(--danger-color); }
+        button.success { background-color: var(--success-color); }
+        
+        button.icon-btn { padding: 4px; background: transparent; color: #aaa; border: 1px solid transparent; }
+        button.icon-btn:hover { color: white; background-color: #444; border-color: #555; }
+        button.icon-btn.active { color: var(--highlight-bg); }
+
+        .sep { width: 1px; height: 20px; background: #555; margin: 0 5px; }
+
+        input, select {
+            padding: 4px 6px;
+            border-radius: 3px;
+            border: 1px solid #555;
+            background: #3c3c3c;
+            color: white;
+            font-size: 0.85rem;
+        }
+        input:focus { border-color: var(--accent-color); outline: none; }
+    </style>
+</head>
+<body>
+
+<div class="file-tab-bar" id="fileTabBar">
+    <button class="add-tab-btn" onclick="addNewFile()" title="新しいファイル (自動保存されます)">+</button>
+</div>
+
+<header>
+    <div class="view-controls">
+        <div class="view-tab active" id="tabCode" onclick="switchView('code')">
+            コード編集
+        </div>
+        <div class="view-tab" id="tabPreview" onclick="switchView('preview')">
+            プレビュー (Ctrl+Enter)
+        </div>
+    </div>
+    <div class="header-controls">
+        <button onclick="toggleSidebar()" class="secondary toggle-sidebar-btn">
+            <svg class="icon" viewBox="0 0 24 24"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>
+            履歴・ゴミ箱
+        </button>
+    </div>
+</header>
+
+<div class="main-container">
+
+    <div id="viewCode" class="view-section active">
+        <div class="toolbar">
+            <button onclick="undo()" class="secondary" title="戻す (Ctrl+Z)">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z"/></svg>
+            </button>
+            <button onclick="redo()" class="secondary" title="進める (Ctrl+Y)">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M18.4 10.6C16.55 9 14.15 8 11.5 8c-4.65 0-8.58 3.03-9.96 7.22L3.9 16c1.05-3.19 4.05-5.5 7.6-5.5 1.95 0 3.73.72 5.12 1.88L13 16h9V7l-3.6 3.6z"/></svg>
+            </button>
+    
+            <div class="sep"></div>
+
+            <span style="font-size:0.8rem; color:#888;">
+                <svg class="icon" style="width:12px; height:12px;" viewBox="0 0 24 24"><path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/></svg>
+                自動保存ON
+            </span>
+            
+            <div class="sep"></div>
+
+            <button onclick="toggleSearchPanel()" class="secondary" title="検索 (Ctrl+F)">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+                検索
+            </button>
+            <div style="flex:1;"></div>
+            <select id="downloadFormat">
+                <option value="html">.html</option>
+                <option value="txt">.txt</option>
+            </select>
+            <button onclick="downloadCode()">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+                DL
+            </button>
+        </div>
+
+        <div id="searchPanel" class="search-panel">
+            <input type="text" id="searchInput" placeholder="検索文字列" oninput="highlightSearch()">
+            
+            <button onclick="findNext()" class="icon-btn" title="次へ">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M20 12l-1.41-1.41L13 16.17V4h-2v12.17l-5.58-5.59L4 12l8 8 8-8z"/></svg>
+            </button>
+            <div class="sep"></div>
+            <input type="text" id="replaceInput" placeholder="置換文字列">
+            <button onclick="doReplace()" class="secondary">置換</button>
+            <button onclick="doReplaceAll()" class="secondary">全置換</button>
+        </div>
+
+        <div class="editor-wrapper">
+            <div class="line-numbers" id="lineNumbers">1</div>
+            <div class="code-container" id="codeContainer">
+                <div class="backdrop code-font-style" id="codeBackdrop"></div>
+                <textarea id="codeEditor" class="code-font-style" spellcheck="false" placeholder="ここにコードを入力..."></textarea>
+            </div>
+        </div>
+    </div>
+
+    <div id="viewPreview" class="view-section">
+        <div class="toolbar" style="background: #f0f0f0; border-bottom: 1px solid #ccc; color: #333;">
+            <strong>Browser Preview</strong>
+            
+            <div style="margin-left: auto; display: flex; gap: 5px;">
+                <button onclick="toggleZenMode()" class="secondary" title="ヘッダーやタブを非表示">
+                   <svg class="icon" viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg> UI切替
+                </button>
+                <button onclick="updatePreview()" class="secondary" style="color:white;">
+                    <svg class="icon" viewBox="0 0 24 24" style="fill:white;"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+                    更新 (Ctrl+Enter)
+                </button>
+            </div>
+        </div>
+        <iframe id="previewFrame"></iframe>
+    </div>
+
+</div>
+
+<div id="historySidebar" class="history-sidebar">
+    <div class="sidebar-tabs">
+        <div class="sidebar-tab active" id="tabHistory" onclick="switchSidebarTab('history')">履歴</div>
+        <div class="sidebar-tab" id="tabTrash" onclick="switchSidebarTab('trash')">ゴミ箱</div>
+    </div>
+    
+    <div class="history-controls">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <strong id="sidebarTitle">履歴管理</strong>
+            <button onclick="toggleSidebar()" class="icon-btn toggle-sidebar-btn">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+            </button>
+        </div>
+        
+        <input type="text" id="historySearch" placeholder="検索..." oninput="renderSidebarContent()">
+        <select id="historySort" onchange="renderSidebarContent()">
+            <option value="dateDesc">新しい順</option>
+            <option value="dateAsc">古い順</option>
+            <option value="nameAsc">名前 (A-Z)</option>
+        </select>
+        <button id="deleteAllBtn" onclick="deleteAllItems()" class="danger" style="margin-top:5px; width:100%; justify-content:center;">一括削除</button>
+    </div>
+    <ul id="historyList" class="history-list">
+    </ul>
+</div>
+
+<script>
+    // --- Initial Config & Data ---
+    const defaultCode = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  body { font-family: sans-serif; padding: 20px; line-height: 1.6; }
+  h1 { color: #007acc; border-bottom: 2px solid #ddd; }
+  .box { background: #f9f9f9; padding: 15px; border-radius: 5px; }
+</style>
+</head>
+<body>
+  <h1>HTML Editor v3</h1>
+  <div class="box">
+    <p>構文ハイライト機能を追加しました。</p>
+    <p>変更は履歴に<b>自動保存</b>されます。</p>
+    <p>タブをダブルクリックして名前を変更できます。</p>
+  </div>
+</body>
+</html>`;
+    // Elements
+    const codeEditor = document.getElementById('codeEditor');
+    const codeBackdrop = document.getElementById('codeBackdrop');
+    const lineNumbers = document.getElementById('lineNumbers');
+    const previewFrame = document.getElementById('previewFrame');
+    const fileTabBar = document.getElementById('fileTabBar');
+    
+    // State
+    let searchMatches = [];
+    let currentMatchIndex = -1;
+    let files = []; // Array of file objects
+    let activeFileId = null;
+    let currentSidebarMode = 'history'; // 'history' or 'trash'
+
+    // --- Window Load ---
+    window.onload = () => {
+        addNewFile('index.html', defaultCode); // This will trigger auto-save init
+        cleanupTrash(); 
+        renderSidebarContent();
+
+        // サイドバー外クリックで閉じる処理
+        document.addEventListener('click', (e) => {
+            const sidebar = document.getElementById('historySidebar');
+            // クリックした要素がサイドバー内部でもなく、開閉ボタンそのものでもない場合
+            if (sidebar.classList.contains('open') && 
+                !sidebar.contains(e.target) && 
+                !e.target.closest('.toggle-sidebar-btn')) {
+                toggleSidebar();
+            }
+        });
+    };
+    // --- Keyboard Shortcuts ---
+    document.addEventListener('keydown', (e) => {
+        const ctrl = e.ctrlKey || e.metaKey;
+
+        if (ctrl) {
+            switch(e.key.toLowerCase()) {
+                case 's': // Save (Now just logs or triggers visual feedback since auto-save is on)
+                    e.preventDefault();
+                    // Optional: Visual flash or toast to confirm save (not strictly needed with auto-save)
+                    console.log("Auto-saved");
+                    break;
+                case 'f': // Find
+                    e.preventDefault();
+                    toggleSearchPanel();
+                    break;
+                case 'enter': // Preview
+                    e.preventDefault();
+                    if (document.getElementById('tabCode').classList.contains('active')) {
+                        switchView('preview');
+                    } else {
+                        updatePreview();
+                    }
+                    break;
+                case 'z': // Undo
+                    e.preventDefault();
+                    if (e.shiftKey) {
+                        redo();
+                    } else {
+                        undo();
+                    }
+                    break;
+                case 'y': // Redo
+                    e.preventDefault();
+                    redo();
+                    break;
+            }
+        }
+    });
+    // --- File Tabs Logic & Undo Stack ---
+    // Added dbId param to link file tab with history entry
+    function addNewFile(name, content, dbId = null) {
+        const id = Date.now().toString() + Math.random().toString(16).slice(2);
+        let initialName = name;
+        if (!initialName) {
+            const dateStr = new Date().toLocaleString('ja-JP', { month: '2-digit', day: '2-digit', hour:'2-digit', minute:'2-digit' });
+            initialName = `Draft ${dateStr}`;
+        }
+        
+        const fileContent = content !== undefined ? content : '';
+        
+        // Auto-Save: Create History Entry Immediately if new
+        let historyId = dbId;
+        if (!historyId) {
+            historyId = createInitialHistory(initialName, fileContent);
+        }
+
+        files.push({ 
+            id, 
+            dbId: historyId, // Link to localStorage ID
+            name: initialName, 
+            content: fileContent,
+            history: [fileContent], // Undo Stack
+            historyIndex: 0          // Stack Pointer
+        });
+
+        switchFile(id);
+    }
+
+    function switchFile(id) {
+        if (activeFileId) {
+            const currentFile = files.find(f => f.id === activeFileId);
+            if (currentFile) {
+                currentFile.content = codeEditor.value;
+            }
+        }
+
+        activeFileId = id;
+        const file = files.find(f => f.id === activeFileId);
+        
+        codeEditor.value = file ? file.content : '';
+        
+        document.getElementById('searchInput').value = '';
+        highlightSearch(); // This calls syncBackdrop inside
+        updateLineNumbers();
+        if (document.getElementById('tabPreview').classList.contains('active')) {
+            updatePreview();
+        }
+
+        renderFileTabs();
+    }
+
+    function closeFile(e, id) {
+        e.stopPropagation();
+        if (files.length <= 1) {
+            alert("最後のタブは閉じられません");
+            return;
+        }
+        // 確認ダイアログ削除
+        // if (!confirm("タブを閉じますか？（履歴には保存されています）")) return;
+        
+        const index = files.findIndex(f => f.id === id);
+        files.splice(index, 1);
+        if (id === activeFileId) {
+            const nextFile = files[index] || files[index - 1];
+            switchFile(nextFile.id);
+        } else {
+            renderFileTabs();
+        }
+    }
+
+    function renameFile(id) {
+        const file = files.find(f => f.id === id);
+        if(!file) return;
+        const newName = prompt("ファイル名を変更:", file.name);
+        if(newName && newName.trim() !== "") {
+            file.name = newName;
+            renderFileTabs();
+            // Update History Title
+            updateHistoryTitle(file.dbId, newName);
+        }
+    }
+
+    function renderFileTabs() {
+        const addBtn = fileTabBar.querySelector('.add-tab-btn');
+        fileTabBar.innerHTML = '';
+        
+        files.forEach(file => {
+            const div = document.createElement('div');
+            div.className = `file-tab ${file.id === activeFileId ? 'active' : ''}`;
+            div.onclick = () => switchFile(file.id);
+            div.ondblclick = () => renameFile(file.id); // Add rename feature
+            div.title = "ダブルクリックで名前変更";
+            div.innerHTML = `
+                <span>${escapeHtml(file.name)}</span>
+                <span class="file-tab-close" onclick="closeFile(event, '${file.id}')">✕</span>
+            `;
+            fileTabBar.appendChild(div);
+        });
+        fileTabBar.appendChild(addBtn);
+    }
+
+    // --- Undo / Redo Implementation ---
+    let debounceTimer = null;
+    function pushHistory(newContent) {
+        const file = files.find(f => f.id === activeFileId);
+        if(!file) return;
+        if (file.history[file.historyIndex] === newContent) return;
+
+        if (file.historyIndex < file.history.length - 1) {
+            file.history = file.history.slice(0, file.historyIndex + 1);
+        }
+
+        file.history.push(newContent);
+        file.historyIndex++;
+        file.content = newContent;
+        if (file.history.length > 50) {
+            file.history.shift();
+            file.historyIndex--;
+        }
+    }
+
+    function undo() {
+        const file = files.find(f => f.id === activeFileId);
+        if (!file || file.historyIndex <= 0) return;
+
+        file.historyIndex--;
+        const prevContent = file.history[file.historyIndex];
+        
+        codeEditor.value = prevContent;
+        file.content = prevContent;
+
+        updateLineNumbers();
+        syncBackdrop();
+        // Also trigger auto-save on undo
+        triggerAutoSave(file.dbId, prevContent);
+    }
+
+    function redo() {
+        const file = files.find(f => f.id === activeFileId);
+        if (!file || file.historyIndex >= file.history.length - 1) return;
+
+        file.historyIndex++;
+        const nextContent = file.history[file.historyIndex];
+        
+        codeEditor.value = nextContent;
+        file.content = nextContent;
+        updateLineNumbers();
+        syncBackdrop();
+        // Also trigger auto-save on redo
+        triggerAutoSave(file.dbId, nextContent);
+    }
+
+    // --- View Switching ---
+    function switchView(mode) {
+        document.getElementById('tabCode').classList.toggle('active', mode === 'code');
+        document.getElementById('tabPreview').classList.toggle('active', mode === 'preview');
+        
+        document.getElementById('viewCode').classList.toggle('active', mode === 'code');
+        document.getElementById('viewPreview').classList.toggle('active', mode === 'preview');
+        if (mode === 'preview') {
+            updatePreview();
+        }
+    }
+    
+    // --- Zen Mode (UI Toggle) ---
+    function toggleZenMode() {
+        document.body.classList.toggle('zen-mode');
+    }
+
+    // --- Editor Logic ---
+    codeEditor.addEventListener('scroll', () => {
+        const top = codeEditor.scrollTop;
+        const left = codeEditor.scrollLeft;
+        codeBackdrop.scrollTop = top;
+        codeBackdrop.scrollLeft = left;
+        lineNumbers.scrollTop = top;
+    });
+    let autoSaveDebounce = null;
+
+    codeEditor.addEventListener('input', () => {
+        const val = codeEditor.value;
+        const file = files.find(f => f.id === activeFileId);
+        if(file) {
+            file.content = val;
+            
+            // Trigger Auto-Save to localStorage
+            clearTimeout(autoSaveDebounce);
+            autoSaveDebounce = setTimeout(() => {
+                updateHistoryContent(file.dbId, val);
+            }, 1000); // Auto-save 1 second after typing stops
+        }
+
+        updateLineNumbers();
+        syncBackdrop();
+        if(document.getElementById('searchInput').value) highlightSearch();
+
+        // Undo history
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+            pushHistory(val);
+        }, 500);
+    });
+    function triggerAutoSave(dbId, content) {
+        clearTimeout(autoSaveDebounce);
+        updateHistoryContent(dbId, content);
+    }
+
+    codeEditor.addEventListener('keydown', (e) => {
+        if (e.key === 'Tab') {
+            e.preventDefault();
+            document.execCommand('insertText', false, "  ");
+        }
+    });
+    function updateLineNumbers() {
+        const lines = codeEditor.value.split('\n').length;
+        if (lineNumbers.childElementCount !== lines) {
+            lineNumbers.innerHTML = Array(lines).fill(0).map((_, i) => `<div>${i + 1}</div>`).join('');
+        }
+    }
+
+    // --- Syntax Highlight & Backdrop ---
+    function syncBackdrop() {
+        // If search is active, don't use Prism (Search highlight takes precedence)
+        if (document.getElementById('searchInput').value) return;
+        let code = codeEditor.value;
+        // Handle final newline for scrolling sync
+        if (code.endsWith("\n")) {
+            code += " ";
+        }
+
+        // Apply Prism Syntax Highlighting
+        // We wrap in a generic container but Prism.highlight returns HTML string
+        // We use 'html' language grammar
+        const highlighted = Prism.highlight(code, Prism.languages.html, 'html');
+        codeBackdrop.innerHTML = highlighted;
+    }
+
+    // --- Preview Logic ---
+    function updatePreview() {
+        const doc = previewFrame.contentDocument || previewFrame.contentWindow.document;
+        doc.open();
+        doc.write(codeEditor.value);
+        doc.close();
+    }
+
+    // --- Search Logic ---
+    function toggleSearchPanel() {
+        const panel = document.getElementById('searchPanel');
+        panel.classList.toggle('active');
+        if (panel.classList.contains('active')) {
+            document.getElementById('searchInput').focus();
+        } else {
+            document.getElementById('searchInput').value = '';
+            syncBackdrop(); // Restore syntax highlight
+        }
+    }
+
+    function escapeHtml(text) {
+        return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    }
+
+    function highlightSearch() {
+        const term = document.getElementById('searchInput').value;
+        const text = codeEditor.value;
+        
+        if (!term) {
+            syncBackdrop(); // Revert to Syntax Highlight
+            searchMatches = [];
+            return;
+        }
+
+        // Search highlight overrides syntax highlight for simplicity
+        const escapedTerm = escapeHtml(term);
+        const regex = new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'); 
+        
+        let matchCount = 0;
+        const highlightedHtml = escapeHtml(text).replace(regex, (match) => {
+            matchCount++;
+            return `<mark data-index="${matchCount-1}">${match}</mark>`;
+        });
+        
+        codeBackdrop.innerHTML = highlightedHtml + (text.endsWith('\n') ? '<br>&nbsp;' : '');
+        codeBackdrop.scrollTop = codeEditor.scrollTop;
+        codeBackdrop.scrollLeft = codeEditor.scrollLeft;
+        searchMatches = codeBackdrop.querySelectorAll('mark');
+        currentMatchIndex = -1;
+    }
+
+    function findNext() {
+        if (searchMatches.length === 0) return;
+        if (currentMatchIndex >= 0 && searchMatches[currentMatchIndex]) {
+            searchMatches[currentMatchIndex].classList.remove('current');
+        }
+        currentMatchIndex = (currentMatchIndex + 1) % searchMatches.length;
+        const target = searchMatches[currentMatchIndex];
+        target.classList.add('current');
+        target.scrollIntoView({ block: "center", inline: "nearest" });
+        codeEditor.scrollTop = codeBackdrop.scrollTop;
+        codeEditor.scrollLeft = codeBackdrop.scrollLeft;
+    }
+
+    function doReplace() {
+        const term = document.getElementById('searchInput').value;
+        const rep = document.getElementById('replaceInput').value;
+        if (!term) return;
+        codeEditor.value = codeEditor.value.replace(term, rep);
+        pushHistory(codeEditor.value);
+        highlightSearch(); 
+        updateLineNumbers();
+        const file = files.find(f => f.id === activeFileId);
+        if(file) triggerAutoSave(file.dbId, codeEditor.value);
+    }
+
+    function doReplaceAll() {
+        const term = document.getElementById('searchInput').value;
+        const rep = document.getElementById('replaceInput').value;
+        if (!term) return;
+        codeEditor.value = codeEditor.value.replaceAll(term, rep);
+        pushHistory(codeEditor.value);
+        highlightSearch();
+        updateLineNumbers();
+        const file = files.find(f => f.id === activeFileId);
+        if(file) triggerAutoSave(file.dbId, codeEditor.value);
+    }
+
+    function downloadCode() {
+        // 修正点: UTF-8 BOM を先頭に付けてダウンロードすることで Windows のメモ帳等での文字化けを防止
+        const format = document.getElementById('downloadFormat').value;
+        const content = codeEditor.value;
+        const bom = '\uFEFF'; // UTF-8 BOM
+        const mime = format === 'html' ? 'text/html;charset=utf-8' : 'text/plain;charset=utf-8';
+        const blob = new Blob([bom + content], { type: mime });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const file = files.find(f => f.id === activeFileId);
+        let filename = file ? file.name : `code.${format}`;
+        if (!filename.toLowerCase().endsWith(`.${format}`)) {
+            filename = `${filename}.${format}`;
+        }
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+    }
+
+    // --- History & Trash System (Auto-Save Edition) ---
+    const HISTORY_KEY = 'htmlEditorV2_History';
+    const TRASH_KEY = 'htmlEditorV2_Trash';
+    const historySidebar = document.getElementById('historySidebar');
+
+    function toggleSidebar() {
+        historySidebar.classList.toggle('open');
+        if (historySidebar.classList.contains('open')) {
+            renderSidebarContent();
+        }
+    }
+
+    function switchSidebarTab(mode) {
+        currentSidebarMode = mode;
+        document.getElementById('tabHistory').className = `sidebar-tab ${mode === 'history' ? 'active' : ''}`;
+        document.getElementById('tabTrash').className = `sidebar-tab ${mode === 'trash' ? 'active' : ''}`;
+        document.getElementById('sidebarTitle').innerText = mode === 'history' ? '保存履歴' : 'ゴミ箱';
+        
+        // 一括削除ボタンのテキスト変更
+        const btn = document.getElementById('deleteAllBtn');
+        btn.innerText = mode === 'history' ? '一括削除 (ゴミ箱へ)' : 'ゴミ箱を空にする';
+        
+        renderSidebarContent();
+    }
+
+    function getStorageData(key) {
+        return JSON.parse(localStorage.getItem(key) || '[]');
+    }
+
+    function setStorageData(key, data) {
+        localStorage.setItem(key, JSON.stringify(data));
+    }
+
+    function cleanupTrash() {
+        let trash = getStorageData(TRASH_KEY);
+        const now = Date.now();
+        const oneWeek = 7 * 24 * 60 * 60 * 1000;
+        const freshTrash = trash.filter(item => {
+            if (!item.deletedAt) return false;
+            return (now - item.deletedAt) < oneWeek;
+        });
+        if (freshTrash.length !== trash.length) {
+            setStorageData(TRASH_KEY, freshTrash);
+        }
+    }
+
+    // Create a new entry immediately
+    function createInitialHistory(title, code) {
+        const data = getStorageData(HISTORY_KEY);
+        const newId = Date.now();
+        const newItem = {
+            id: newId,
+            title: title,
+            code: code,
+            date: new Date().toISOString(),
+            pinned: false
+        };
+        data.unshift(newItem);
+        setStorageData(HISTORY_KEY, data);
+        if (historySidebar.classList.contains('open')) renderSidebarContent();
+        return newId;
+    }
+
+    // Auto-Save: Update existing entry
+    function updateHistoryContent(dbId, newCode) {
+        if(!dbId) return;
+        let data = getStorageData(HISTORY_KEY);
+        const item = data.find(i => i.id === dbId);
+        if(item) {
+            item.code = newCode;
+            item.date = new Date().toISOString(); // Update timestamp
+            // Move to top if updated?
+            // Standard logic usually does.
+            // Remove and unshift to bring to top
+            data = data.filter(i => i.id !== dbId);
+            data.unshift(item);
+            
+            setStorageData(HISTORY_KEY, data);
+            if (historySidebar.classList.contains('open')) renderSidebarContent();
+        }
+    }
+
+    function updateHistoryTitle(dbId, newTitle) {
+        if(!dbId) return;
+        let data = getStorageData(HISTORY_KEY);
+        const item = data.find(i => i.id === dbId);
+        if(item) {
+            item.title = newTitle;
+            setStorageData(HISTORY_KEY, data);
+            if (historySidebar.classList.contains('open')) renderSidebarContent();
+        }
+    }
+
+    // Move to Trash
+    function softDeleteHistory(id) {
+        if (!confirm("ゴミ箱に移動しますか？（1週間後に完全削除されます）")) return;
+        let history = getStorageData(HISTORY_KEY);
+        const item = history.find(i => i.id === id);
+        if (item) {
+            history = history.filter(i => i.id !== id);
+            setStorageData(HISTORY_KEY, history);
+
+            let trash = getStorageData(TRASH_KEY);
+            item.deletedAt = Date.now(); 
+            item.pinned = false; 
+            trash.unshift(item);
+            setStorageData(TRASH_KEY, trash);
+            // If the deleted file is currently open, close it or alert
+            // Simple approach: do nothing to active tab, but next time it won't sync to history
+            renderSidebarContent();
+        }
+    }
+    
+    // Bulk Delete / Empty Trash
+    function deleteAllItems() {
+        const isTrash = currentSidebarMode === 'trash';
+        const msg = isTrash ? "ゴミ箱を完全に空にしますか？この操作は取り消せません。" : "ピン留めされていない履歴をすべてゴミ箱へ移動しますか？";
+        
+        if (!confirm(msg)) return;
+
+        if (isTrash) {
+            // ゴミ箱を空にする
+            setStorageData(TRASH_KEY, []);
+        } else {
+            // 履歴を一括削除（ピン留め以外）
+            let history = getStorageData(HISTORY_KEY);
+            let trash = getStorageData(TRASH_KEY);
+            
+            const pinnedItems = history.filter(i => i.pinned);
+            const itemsToDelete = history.filter(i => !i.pinned);
+            
+            if (itemsToDelete.length === 0) {
+                alert("削除対象のアイテムがありません");
+                return;
+            }
+
+            itemsToDelete.forEach(item => {
+                item.deletedAt = Date.now();
+                item.pinned = false;
+            });
+
+            setStorageData(HISTORY_KEY, pinnedItems);
+            setStorageData(TRASH_KEY, [...itemsToDelete, ...trash]);
+        }
+        renderSidebarContent();
+    }
+
+    function restoreTrashItem(id) {
+        let trash = getStorageData(TRASH_KEY);
+        const item = trash.find(i => i.id === id);
+
+        if (item) {
+            trash = trash.filter(i => i.id !== id);
+            setStorageData(TRASH_KEY, trash);
+
+            let history = getStorageData(HISTORY_KEY);
+            delete item.deletedAt; 
+            history.unshift(item);
+            setStorageData(HISTORY_KEY, history);
+            renderSidebarContent();
+        }
+    }
+
+    function permDeleteTrashItem(id) {
+        if (!confirm("完全に削除しますか？この操作は取り消せません。")) return;
+        let trash = getStorageData(TRASH_KEY);
+        trash = trash.filter(i => i.id !== id);
+        setStorageData(TRASH_KEY, trash);
+        renderSidebarContent();
+    }
+
+    function togglePin(id) {
+        let data = getStorageData(HISTORY_KEY);
+        const item = data.find(i => i.id === id);
+        if (item) {
+            item.pinned = !item.pinned;
+            setStorageData(HISTORY_KEY, data);
+            renderSidebarContent();
+        }
+    }
+
+    function loadHistoryItem(id, fromTrash = false) {
+        const key = fromTrash ? TRASH_KEY : HISTORY_KEY;
+        const data = getStorageData(key);
+        const item = data.find(i => i.id === id);
+        if (item) {
+            if (fromTrash) {
+                if(!confirm("ゴミ箱のアイテムです。エディタに読み込みますか？")) return;
+            }
+            // Load and link to existing DB ID
+            addNewFile(item.title, item.code, item.id);
+            if(window.innerWidth < 768) toggleSidebar();
+        }
+    }
+
+    function renderSidebarContent() {
+        const list = document.getElementById('historyList');
+        const searchTerm = document.getElementById('historySearch').value.toLowerCase();
+        const sortMode = document.getElementById('historySort').value;
+        
+        const isTrash = currentSidebarMode === 'trash';
+        const storageKey = isTrash ? TRASH_KEY : HISTORY_KEY;
+        let data = getStorageData(storageKey);
+
+        // Filter
+        if (searchTerm) {
+            data = data.filter(item => item.title.toLowerCase().includes(searchTerm));
+        }
+
+        // Sort
+        data.sort((a, b) => {
+            if (!isTrash && a.pinned !== b.pinned) return b.pinned ? 1 : -1;
+            if (sortMode === 'dateDesc') return new Date(b.date) - new Date(a.date);
+            if (sortMode === 'dateAsc') return new Date(a.date) - new Date(b.date);
+            if (sortMode === 'nameAsc') return a.title.localeCompare(b.title);
+            return 0;
+        });
+        list.innerHTML = '';
+        if (data.length === 0) {
+            list.innerHTML = '<li style="padding:10px; color:#888; text-align:center;">アイテムがありません</li>';
+            return;
+        }
+
+        data.forEach(item => {
+            const li = document.createElement('li');
+            li.className = `history-item ${item.pinned ? 'pinned' : ''}`;
+            
+            const dateStr = new Date(item.date).toLocaleString('ja-JP', { 
+                year: 'numeric', month: '2-digit', day: '2-digit', hour:'2-digit', minute:'2-digit' 
+            });
+
+            // Icons
+            const pinIcon = `<svg class="icon" viewBox="0 0 24 24"><path d="M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3z"/></svg>`;
+            const trashIcon = `<svg class="icon" viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>`;
+        
+            const restoreIcon = `<svg class="icon" viewBox="0 0 24 24"><path d="M14 12c0-1.1-.9-2-2-2s-2 .9-2 2 .9 2 2 2 2-.9 2-2zm-2-9c-4.97 0-9 4.03-9 9H0l4 4 4-4H5c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.51 0-2.91-.49-4.06-1.3l-1.42 1.44C8.04 20.3 9.94 21 12 21c4.97 0 9-4.03 9-9s-4.03-9-9-9z"/></svg>`;
+            const deleteForeverIcon = `<svg class="icon" viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>`;
+            let buttonsHtml = '';
+            if (isTrash) {
+                buttonsHtml = `
+                    <button class="icon-btn success" onclick="event.stopPropagation(); restoreTrashItem(${item.id})" title="復元">${restoreIcon}</button>
+                    <button class="icon-btn danger" onclick="event.stopPropagation(); permDeleteTrashItem(${item.id})" title="完全削除">${deleteForeverIcon}</button>
+                `;
+            } else {
+                buttonsHtml = `
+                    <button class="icon-btn ${item.pinned ? 'active' : ''}" onclick="event.stopPropagation(); togglePin(${item.id})" title="ピン留め">${pinIcon}</button>
+                    <button class="icon-btn danger" onclick="event.stopPropagation(); softDeleteHistory(${item.id})" title="削除（ゴミ箱へ）">${trashIcon}</button>
+                `;
+            }
+
+            li.innerHTML = `
+                <span class="history-title" onclick="loadHistoryItem(${item.id}, ${isTrash})">${escapeHtml(item.title)}</span>
+                <div class="history-meta">
+                    <span style="font-size:10px;">${isTrash ? '削除待機中' : dateStr}</span>
+                    <div>${buttonsHtml}</div>
+                </div>
+            `;
+            list.appendChild(li);
+        });
+    }
+
+</script>
+</body>
+</html>
