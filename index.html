@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Advanced Editor v4.3 (Smart Guides)</title>
+    <title>Advanced Editor v4.4 (Home & Persistence)</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-html.min.js"></script>
@@ -156,6 +156,11 @@
             border-bottom-color: var(--accent-color);
             font-weight: bold;
         }
+        
+        .header-controls {
+            display: flex;
+            gap: 10px;
+        }
 
         /* --- Main Layout --- */
         .main-container {
@@ -234,13 +239,15 @@
         }
 
         .indent-row {
-            height: 21px; /* 14px font * 1.5 line-height = 21px */
+            height: 21px;
+            /* 14px font * 1.5 line-height = 21px */
             display: flex;
             align-items: center;
         }
 
         .indent-marker {
-            width: 2ch; /* Assuming 2 space indentation */
+            width: 2ch;
+            /* Assuming 2 space indentation */
             height: 100%;
             border-right: 1px solid rgba(255, 255, 255, 0.1); /* Subtle line */
             flex-shrink: 0;
@@ -318,7 +325,7 @@
         
         /* Python Console Output */
         #consoleOutput {
-            display: none; /* Toggled via JS */
+            display: none;
             flex: 1;
             background-color: var(--console-bg);
             color: #eee;
@@ -360,7 +367,7 @@
         .package-panel.active { display: flex; }
         
         .pkg-controls {
-            display: flex; 
+            display: flex;
             align-items: center;
             gap: 5px;
             flex-wrap: wrap;
@@ -488,16 +495,132 @@
         .mode-indicator { font-size: 0.75rem; margin-right: 10px; font-weight: bold; padding: 2px 5px; border-radius: 3px;}
         .mode-html { color: #e34c26; border: 1px solid #e34c26; }
         .mode-python { color: #3572A5; border: 1px solid #3572A5; }
+
+        /* --- Home Screen --- */
+        #homeScreen {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--bg-color);
+            z-index: 200;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .home-container {
+            max-width: 900px;
+            width: 100%;
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+        }
+
+        .home-header {
+            text-align: center;
+            margin-bottom: 20px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .home-actions {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+        
+        .home-actions button {
+            font-size: 1.1rem;
+            padding: 10px 20px;
+        }
+
+        .home-lists {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        @media (max-width: 768px) {
+            .home-lists { grid-template-columns: 1fr; }
+        }
+
+        .home-card {
+            background: var(--sidebar-bg);
+            border-radius: 5px;
+            border: 1px solid var(--border-color);
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            height: 500px;
+        }
+
+        .home-card h3 {
+            margin-top: 0;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .home-file-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            overflow-y: auto;
+            flex: 1;
+        }
     </style>
 </head>
 <body>
 
+<div id="homeScreen">
+    <div class="home-container">
+        <div class="home-header">
+            <h1>Advanced Editor v4.4</h1>
+            <p style="color:#888;">HTML / Python Web Editor with Persistence</p>
+        </div>
+
+        <div class="home-actions">
+            <button onclick="createNewFileFlow()" class="success">
+                <svg class="icon" viewBox="0 0 24 24" style="margin-right:8px;"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+                新規ファイル作成
+            </button>
+        </div>
+
+        <div class="home-lists">
+            <div class="home-card">
+                <h3>
+                    最近使用したファイル
+                    <button class="secondary" onclick="deleteAllFromHome('history')" style="font-size:0.7rem;">一括削除</button>
+                </h3>
+                <ul id="homeHistoryList" class="home-file-list">
+                    </ul>
+            </div>
+
+            <div class="home-card">
+                <h3>
+                    ゴミ箱
+                    <button class="danger" onclick="deleteAllFromHome('trash')" style="font-size:0.7rem;">ゴミ箱を空にする</button>
+                </h3>
+                <ul id="homeTrashList" class="home-file-list">
+                     </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="file-tab-bar" id="fileTabBar">
-    <button class="add-tab-btn" onclick="addNewFile()" title="新しいファイル (自動保存されます)">+</button>
+    <button class="add-tab-btn" onclick="createNewFileFlow()" title="新しいファイル">+</button>
 </div>
 
 <header>
     <div class="view-controls">
+        <button onclick="showHome()" class="secondary" style="margin-right:10px;">
+            <svg class="icon" viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+            ホーム
+        </button>
         <div class="view-tab active" id="tabCode" onclick="switchView('code')">
             コード編集
         </div>
@@ -590,7 +713,6 @@
             <div class="line-numbers" id="lineNumbers">1</div>
             <div class="code-container" id="codeContainer">
                 <div class="indent-overlay" id="indentOverlay"></div>
-                
                 <div class="backdrop code-font-style" id="codeBackdrop"></div>
                 <textarea id="codeEditor" class="code-font-style" spellcheck="false" placeholder="ここにコードを入力..."></textarea>
             </div>
@@ -631,7 +753,7 @@
                 <svg class="icon" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
             </button>
         </div>
-       
+
         <input type="text" id="historySearch" placeholder="検索..." oninput="renderSidebarContent()">
         <select id="historySort" onchange="renderSidebarContent()">
             <option value="dateDesc">新しい順</option>
@@ -661,27 +783,13 @@
   <div class="box">
     <p>改善点:</p>
     <ul>
-        <li><b>スマート・インデントガイド</b>: インデントがある場所にのみ縦線が表示されるようになりました。</li>
-        <li><b>タブ操作</b>: ドラッグ中に名前変更画面が出ないように修正しました。</li>
+        <li><b>ホーム画面</b>: 起動時にホーム画面を表示するようにしました。</li>
+        <li><b>パッケージ永続化</b>: インストールしたライブラリは次回起動時も維持されます。</li>
+        <li><b>命名必須</b>: 新規作成時にファイル名を決定するようにしました。</li>
     </ul>
   </div>
 </body>
 </html>`;
-
-    const defaultPython = `# Python Example
-import sys
-
-print(f"Python version: {sys.version}")
-
-def greet(name):
-    # インデントガイドが適切な位置にのみ表示されます
-    if name:
-        return f"Hello, {name}!"
-    else:
-        return "Hello!"
-
-print(greet("World"))
-`;
 
     // Elements
     const codeEditor = document.getElementById('codeEditor');
@@ -691,31 +799,42 @@ print(greet("World"))
     const previewFrame = document.getElementById('previewFrame');
     const consoleOutput = document.getElementById('consoleOutput');
     const fileTabBar = document.getElementById('fileTabBar');
+    const homeScreen = document.getElementById('homeScreen');
 
     // Pyodide State
     let pyodide = null;
     let pyodideReady = false;
-
+    
     // State
     let searchMatches = [];
     let currentMatchIndex = -1;
-    let files = []; // Array of file objects
+    let files = [];
     let activeFileId = null;
     let currentSidebarMode = 'history';
 
+    // Constants
+    const HISTORY_KEY = 'htmlEditorV4_History';
+    const TRASH_KEY = 'htmlEditorV4_Trash';
+    const PKG_KEY = 'htmlEditorV4_InstalledPkgs';
+
     // --- Window Load & Pyodide Init ---
     window.onload = async () => {
-        addNewFile('index.html', defaultHtml);
         cleanupTrash(); 
-        renderSidebarContent();
         
+        // Show Home instead of creating default file
+        showHome();
+
         // Pyodide Load
         try {
             consoleOutput.textContent = "Python環境(Pyodide)をロード中...";
             pyodide = await loadPyodide();
             await pyodide.loadPackage("micropip");
             pyodideReady = true;
-            consoleOutput.textContent = "Python環境の準備完了。実行できます。";
+            consoleOutput.textContent = "Python環境の準備完了。";
+            
+            // Restore installed packages
+            await restorePackages();
+
             console.log("Pyodide Ready");
         } catch (e) {
             consoleOutput.textContent = "Python環境のロードに失敗しました。\n" + e;
@@ -732,6 +851,142 @@ print(greet("World"))
         });
     };
 
+    // --- Home Screen Logic ---
+    function showHome() {
+        homeScreen.style.display = 'flex';
+        // Hide editor UI
+        document.querySelector('header').style.display = 'none';
+        document.querySelector('.file-tab-bar').style.display = 'none';
+        document.querySelector('.main-container').style.display = 'none';
+        
+        renderHomeLists();
+    }
+
+    function hideHome() {
+        homeScreen.style.display = 'none';
+        document.querySelector('header').style.display = 'flex';
+        document.querySelector('.file-tab-bar').style.display = 'flex';
+        document.querySelector('.main-container').style.display = 'flex';
+    }
+
+    function renderHomeLists() {
+        const historyList = document.getElementById('homeHistoryList');
+        const trashList = document.getElementById('homeTrashList');
+        
+        // Render History
+        const historyData = getStorageData(HISTORY_KEY);
+        // Sort by date desc
+        historyData.sort((a, b) => new Date(b.date) - new Date(a.date));
+        
+        historyList.innerHTML = '';
+        if (historyData.length === 0) {
+            historyList.innerHTML = '<li style="padding:10px; color:#666; text-align:center;">履歴はありません</li>';
+        } else {
+            historyData.forEach(item => {
+                const li = document.createElement('li');
+                li.className = 'history-item';
+                li.style.display = 'flex';
+                li.style.justifyContent = 'space-between';
+                li.style.alignItems = 'center';
+
+                const dateStr = new Date(item.date).toLocaleString('ja-JP', { month: '2-digit', day: '2-digit', hour:'2-digit', minute:'2-digit' });
+                
+                li.innerHTML = `
+                    <div onclick="openFileFromHome(${item.id})" style="cursor:pointer; flex:1;">
+                        <span style="font-weight:bold; display:block;">${escapeHtml(item.title)}</span>
+                        <span style="font-size:0.75rem; color:#888;">${dateStr}</span>
+                    </div>
+                    <div>
+                        <button class="icon-btn" onclick="renameHistoryItem(${item.id}); renderHomeLists();" title="名前変更">
+                            <svg class="icon" viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+                        </button>
+                        <button class="icon-btn danger" onclick="softDeleteHistory(${item.id}); renderHomeLists();" title="削除">
+                            <svg class="icon" viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                        </button>
+                    </div>
+                `;
+                historyList.appendChild(li);
+            });
+        }
+
+        // Render Trash
+        const trashData = getStorageData(TRASH_KEY);
+        trashData.sort((a, b) => b.deletedAt - a.deletedAt);
+        
+        trashList.innerHTML = '';
+        if (trashData.length === 0) {
+            trashList.innerHTML = '<li style="padding:10px; color:#666; text-align:center;">ゴミ箱は空です</li>';
+        } else {
+            trashData.forEach(item => {
+                const li = document.createElement('li');
+                li.className = 'history-item';
+                li.style.display = 'flex';
+                li.style.justifyContent = 'space-between';
+                li.style.alignItems = 'center';
+                
+                li.innerHTML = `
+                    <div style="flex:1;">
+                        <span style="font-weight:bold; display:block;">${escapeHtml(item.title)}</span>
+                        <span style="font-size:0.75rem; color:#888;">削除待機中</span>
+                    </div>
+                    <div>
+                        <button class="icon-btn success" onclick="restoreTrashItem(${item.id}); renderHomeLists();" title="復元">
+                            <svg class="icon" viewBox="0 0 24 24"><path d="M14 12c0-1.1-.9-2-2-2s-2 .9-2 2 .9 2 2 2 2-.9 2-2zm-2-9c-4.97 0-9 4.03-9 9H0l4 4 4-4H5c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.51 0-2.91-.49-4.06-1.3l-1.42 1.44C8.04 20.3 9.94 21 12 21c4.97 0 9-4.03 9-9s-4.03-9-9-9z"/></svg>
+                        </button>
+                        <button class="icon-btn danger" onclick="permDeleteTrashItem(${item.id}); renderHomeLists();" title="完全削除">
+                            <svg class="icon" viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                        </button>
+                    </div>
+                `;
+                trashList.appendChild(li);
+            });
+        }
+    }
+
+    function createNewFileFlow() {
+        // Prompt for filename FIRST
+        let name = prompt("新規ファイル名を入力してください (例: script.py, index.html):", "untitled.html");
+        if (name === null) return; // Cancelled
+        if (name.trim() === "") name = "untitled.html";
+        
+        hideHome();
+        
+        // Determine default content based on extension
+        let content = '';
+        if (name.endsWith('.py')) {
+            content = `# ${name}\nimport sys\nprint("Hello Python!")`;
+        } else {
+            content = defaultHtml.replace('HTML Editor v4.3', name);
+        }
+
+        addNewFile(name, content);
+    }
+
+    function openFileFromHome(dbId) {
+        hideHome();
+        loadHistoryItem(dbId, false);
+    }
+
+    function deleteAllFromHome(type) {
+        if (type === 'trash') {
+            if(!confirm("ゴミ箱を完全に空にしますか？")) return;
+            setStorageData(TRASH_KEY, []);
+        } else {
+            if(!confirm("履歴をすべてゴミ箱へ移動しますか？")) return;
+            let history = getStorageData(HISTORY_KEY);
+            let trash = getStorageData(TRASH_KEY);
+            
+            history.forEach(item => {
+                item.deletedAt = Date.now();
+                item.pinned = false;
+            });
+            
+            setStorageData(HISTORY_KEY, []);
+            setStorageData(TRASH_KEY, [...history, ...trash]);
+        }
+        renderHomeLists();
+    }
+
     // --- Keyboard Shortcuts ---
     document.addEventListener('keydown', (e) => {
         const ctrl = e.ctrlKey || e.metaKey;
@@ -744,10 +999,12 @@ print(greet("World"))
                     break;
                 case 'f': // Find
                     e.preventDefault();
+                    if(homeScreen.style.display !== 'none') return;
                     toggleSearchPanel();
                     break;
                 case 'enter': // Preview / Run
                     e.preventDefault();
+                    if(homeScreen.style.display !== 'none') return;
                     if (document.getElementById('tabCode').classList.contains('active')) {
                         switchView('preview');
                     } else {
@@ -756,10 +1013,12 @@ print(greet("World"))
                     break;
                 case 'z': // Undo
                     e.preventDefault();
+                    if(homeScreen.style.display !== 'none') return;
                     if (e.shiftKey) redo(); else undo();
                     break;
                 case 'y': // Redo
                     e.preventDefault();
+                    if(homeScreen.style.display !== 'none') return;
                     redo();
                     break;
             }
@@ -769,23 +1028,18 @@ print(greet("World"))
     // --- File Tabs Logic & Undo Stack ---
     function addNewFile(name, content, dbId = null) {
         const id = Date.now().toString() + Math.random().toString(16).slice(2);
-        let initialName = name;
-        if (!initialName) {
-            const dateStr = new Date().toLocaleString('ja-JP', { month: '2-digit', day: '2-digit', hour:'2-digit', minute:'2-digit' });
-            initialName = `Draft ${dateStr}.html`;
-        }
         
         const fileContent = content !== undefined ? content : '';
         
         let historyId = dbId;
         if (!historyId) {
-            historyId = createInitialHistory(initialName, fileContent);
+            historyId = createInitialHistory(name, fileContent);
         }
 
         files.push({ 
             id, 
             dbId: historyId, 
-            name: initialName, 
+            name: name, 
             content: fileContent,
             history: [fileContent],
             historyIndex: 0    
@@ -841,12 +1095,17 @@ print(greet("World"))
 
     function closeFile(e, id) {
         e.stopPropagation();
-        if (files.length <= 1) {
-            alert("最後のタブは閉じられません");
-            return;
-        }
+        
         const index = files.findIndex(f => f.id === id);
         files.splice(index, 1);
+        
+        if (files.length === 0) {
+            // If all files closed, go to Home
+            showHome();
+            activeFileId = null;
+            return;
+        }
+
         if (id === activeFileId) {
             const nextFile = files[index] || files[index - 1];
             switchFile(nextFile.id);
@@ -855,7 +1114,7 @@ print(greet("World"))
         }
     }
 
-    // Rename triggered from Tab (Double click, Right click, Long press)
+    // Rename triggered from Tab
     function renameFile(id) {
         const file = files.find(f => f.id === id);
         if(!file) return;
@@ -875,7 +1134,6 @@ print(greet("World"))
         const delay = 800; // 0.8s for long press
 
         const start = (e) => {
-            // Only left click or touch
             if (e.type === 'mousedown' && e.button !== 0) return;
             element.classList.add('pressing');
             timer = setTimeout(() => {
@@ -899,30 +1157,25 @@ print(greet("World"))
         element.addEventListener('touchend', cancel);
         element.addEventListener('touchmove', cancel);
 
-        // Allow external cancellation
         element.cancelLongPress = cancel;
     }
 
     // --- Tab Drag & Drop Logic ---
     let draggedTabId = null;
-
     function handleTabDragStart(e, id) {
         draggedTabId = id;
         e.dataTransfer.effectAllowed = 'move';
         e.target.classList.add('dragging');
-        
-        // ★FIX: Cancel any pending long-press to prevent rename prompt
         if (e.target.cancelLongPress) {
             e.target.cancelLongPress();
         }
     }
 
     function handleTabDragOver(e) {
-        e.preventDefault(); // Necessary for drop to work
+        e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
         const target = e.target.closest('.file-tab');
         if (target) {
-            // Remove drag-over from all others
             document.querySelectorAll('.file-tab').forEach(t => t.classList.remove('drag-over'));
             target.classList.add('drag-over');
         }
@@ -934,14 +1187,12 @@ print(greet("World"))
             t.classList.remove('dragging');
             t.classList.remove('drag-over');
         });
-
         if (draggedTabId === targetId) return;
 
         const fromIndex = files.findIndex(f => f.id === draggedTabId);
         const toIndex = files.findIndex(f => f.id === targetId);
 
         if (fromIndex >= 0 && toIndex >= 0) {
-            // Move existing file object in array
             const movedFile = files.splice(fromIndex, 1)[0];
             files.splice(toIndex, 0, movedFile);
             renderFileTabs();
@@ -975,7 +1226,7 @@ print(greet("World"))
 
             // Click to switch
             div.onclick = () => switchFile(file.id);
-            
+        
             // Double Click Rename
             div.ondblclick = () => renameFile(file.id);
             
@@ -988,7 +1239,6 @@ print(greet("World"))
 
             // Long Press Rename
             addLongPressEvent(div, () => renameFile(file.id));
-
             div.innerHTML = `
                 <span>${escapeHtml(file.name)}</span>
                 <span class="file-tab-close" onclick="closeFile(event, '${file.id}')">✕</span>
@@ -1072,7 +1322,6 @@ print(greet("World"))
         codeBackdrop.scrollTop = top;
         codeBackdrop.scrollLeft = left;
         lineNumbers.scrollTop = top;
-        // Sync indent guides
         indentOverlay.scrollTop = top;
         indentOverlay.scrollLeft = left;
     });
@@ -1111,7 +1360,6 @@ print(greet("World"))
             document.execCommand('insertText', false, "  ");
         }
     });
-
     function updateLineNumbers() {
         const lines = codeEditor.value.split('\n').length;
         if (lineNumbers.childElementCount !== lines) {
@@ -1119,35 +1367,27 @@ print(greet("World"))
         }
     }
 
-    // --- Smart Indent Guides (New Feature) ---
+    // --- Smart Indent Guides ---
     function updateIndentGuides() {
         const code = codeEditor.value;
         const lines = code.split('\n');
         
-        // Simple parser to find leading spaces
         let html = '';
-        
-        // Tab size assumption: 2 spaces. 
-        const tabSize = 2; 
-
+        const tabSize = 2;
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i];
             const leadingSpaces = line.match(/^ */)[0].length;
             
-            // Calculate how many guides to draw
             const guidesCount = Math.floor(leadingSpaces / tabSize);
-            
             let rowHtml = '<div class="indent-row">';
             for(let j = 0; j < guidesCount; j++) {
                 rowHtml += '<span class="indent-marker"></span>';
             }
-            // Fill empty space if line is empty to keep height correct, though indent-row has fixed height
             rowHtml += '</div>';
             html += rowHtml;
         }
         
         indentOverlay.innerHTML = html;
-        // Fix scroll
         indentOverlay.scrollTop = codeEditor.scrollTop;
         indentOverlay.scrollLeft = codeEditor.scrollLeft;
     }
@@ -1212,12 +1452,32 @@ print(greet("World"))
         }
     }
 
-    // --- Python Package Management ---
+    // --- Python Package Management (With Persistence) ---
     function togglePackagePanel() {
         const panel = document.getElementById('packagePanel');
         panel.classList.toggle('active');
         if(panel.classList.contains('active')) {
             listPackages();
+        }
+    }
+
+    async function restorePackages() {
+        // Load persistent packages
+        const savedPkgs = getStorageData(PKG_KEY);
+        if (savedPkgs.length === 0) return;
+
+        const consoleOut = document.getElementById('consoleOutput');
+        consoleOut.textContent += `\nインストール済みパッケージを復元中 (${savedPkgs.length}個)...\n`;
+
+        try {
+            const micropip = pyodide.pyimport("micropip");
+            for (const pkg of savedPkgs) {
+                 await micropip.install(pkg);
+                 console.log(`Restored package: ${pkg}`);
+            }
+            consoleOut.textContent += `パッケージの復元が完了しました。\n`;
+        } catch (err) {
+             consoleOut.textContent += `パッケージ復元中にエラー: ${err}\n`;
         }
     }
 
@@ -1239,6 +1499,14 @@ print(greet("World"))
             const micropip = pyodide.pyimport("micropip");
             await micropip.install(pkg);
             consoleOut.textContent += `Successfully installed ${pkg}!\n`;
+            
+            // Persist
+            const savedPkgs = getStorageData(PKG_KEY);
+            if (!savedPkgs.includes(pkg)) {
+                savedPkgs.push(pkg);
+                setStorageData(PKG_KEY, savedPkgs);
+            }
+
             input.value = '';
             listPackages(); // refresh list
         } catch (err) {
@@ -1275,12 +1543,10 @@ print(greet("World"))
         listContainer.innerHTML = '<div style="padding:10px; color:#888;">取得中...</div>';
 
         try {
-            // Pythonでmicropip.list()を取得し、JSON文字列にしてJSへ渡す
             await pyodide.runPythonAsync(`
 import micropip
 import js
 import json
-# micropip.list() returns package metadata
 try:
     pkgs = list(micropip.list().keys())
     js.updatePackageListUI(json.dumps(pkgs))
@@ -1293,12 +1559,15 @@ except Exception as e:
     }
 
     async function deletePackage(pkgName) {
-        if(!confirm(`${pkgName} を削除（メモリからアンロード）しますか？\n注意: 完全な削除には環境リセットが必要です。`)) return;
-        
+        if(!confirm(`${pkgName} を削除（メモリからアンロード）しますか？\n次回起動時にも読み込まれなくなります。`)) return;
         if (!pyodideReady) return;
         
         try {
-            // Python: sys.modulesから削除を試みる
+            // Remove from storage
+            let savedPkgs = getStorageData(PKG_KEY);
+            savedPkgs = savedPkgs.filter(p => p !== pkgName);
+            setStorageData(PKG_KEY, savedPkgs);
+
             await pyodide.runPythonAsync(`
 import sys
 import shutil
@@ -1309,27 +1578,18 @@ if pkg in sys.modules:
     del sys.modules[pkg]
     print(f"Unloaded {pkg} from sys.modules")
 
-# ファイルシステムのクリーンアップ試行 (site-packages探索)
-# Note: Pyodideの構成によりパスは異なる場合がありますが、標準的な場所を探します
 paths_to_check = sys.path
-removed = False
 for p in paths_to_check:
     target = pathlib.Path(p) / pkg
     if target.exists() and target.is_dir():
         try:
             shutil.rmtree(target)
-            removed = True
             print(f"Removed directory: {target}")
         except:
             pass
-            
-# メタデータが残るためmicropip.list()からは消えにくいが、UI側で強制的にリスト更新を行う
             `);
-            
-            // UIを更新
-            alert(`${pkgName} をアンロードしました。`);
+            alert(`${pkgName} を削除しました。`);
             listPackages();
-
         } catch(e) {
             alert("削除中にエラーが発生しました:\n" + e);
         }
@@ -1337,6 +1597,7 @@ for p in paths_to_check:
 
     function resetPython() {
         if(!confirm("Python環境をリセット（インストール済みパッケージを全削除）しますか？\nページがリロードされます。")) return;
+        setStorageData(PKG_KEY, []);
         location.reload();
     }
 
@@ -1451,8 +1712,6 @@ for p in paths_to_check:
     }
 
     // --- History & Trash System ---
-    const HISTORY_KEY = 'htmlEditorV4_History';
-    const TRASH_KEY = 'htmlEditorV4_Trash';
     const historySidebar = document.getElementById('historySidebar');
 
     function toggleSidebar() {
@@ -1685,7 +1944,6 @@ for p in paths_to_check:
             // Icons
             const pinIcon = `<svg class="icon" viewBox="0 0 24 24"><path d="M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3z"/></svg>`;
             const trashIcon = `<svg class="icon" viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>`;
-        
             const restoreIcon = `<svg class="icon" viewBox="0 0 24 24"><path d="M14 12c0-1.1-.9-2-2-2s-2 .9-2 2 .9 2 2 2 2-.9 2-2zm-2-9c-4.97 0-9 4.03-9 9H0l4 4 4-4H5c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.51 0-2.91-.49-4.06-1.3l-1.42 1.44C8.04 20.3 9.94 21 12 21c4.97 0 9-4.03 9-9s-4.03-9-9-9z"/></svg>`;
             const deleteForeverIcon = `<svg class="icon" viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>`;
             const editIcon = `<svg class="icon" viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>`;
