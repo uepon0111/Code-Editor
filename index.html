@@ -236,17 +236,20 @@
             z-index: 1;
             pointer-events: none;
             padding: 10px; /* Match editor padding */
-            overflow: hidden; /* JavaScript handles scroll sync */
+            overflow: hidden;
+            /* JavaScript handles scroll sync */
         }
 
         .indent-row {
-            height: 21px; /* 14px font * 1.5 line-height = 21px */
+            height: 21px;
+            /* 14px font * 1.5 line-height = 21px */
             display: flex;
             align-items: center;
         }
 
         .indent-marker {
-            width: 2ch; /* Assuming 2 space indentation */
+            width: 2ch;
+            /* Assuming 2 space indentation */
             height: 100%;
             border-right: 1px dashed rgba(255, 255, 255, 0.25);
             flex-shrink: 0;
@@ -999,6 +1002,7 @@
             }
         }
     });
+
     // --- File Tabs Logic & Undo Stack ---
     function addNewFile(name, content, dbId = null) {
         const id = Date.now().toString() + Math.random().toString(16).slice(2);
@@ -1465,6 +1469,19 @@
                 pyodide.setStdout({ batched: (msg) => {
                     consoleOut.textContent += msg + "\n";
                 }});
+
+                // --- 変更点: 不足しているパッケージを自動インストール ---
+                consoleOut.textContent += "ライブラリの依存関係を確認中...\n";
+                await pyodide.loadPackagesFromImports(codeEditor.value, {
+                    messageCallback: (msg) => {
+                        consoleOut.textContent += `[Auto-Install] ${msg}\n`;
+                    },
+                    errorCallback: (err) => {
+                        consoleOut.textContent += `[Auto-Install Error] ${err}\n`;
+                    }
+                });
+                // ----------------------------------------------------
+
                 await pyodide.runPythonAsync(codeEditor.value);
             } catch (err) {
                 consoleOut.textContent += `\nError:\n${err}`;
@@ -1676,7 +1693,6 @@ for p in paths_to_check:
         codeBackdrop.scrollLeft = codeEditor.scrollLeft;
         searchMatches = codeBackdrop.querySelectorAll('mark');
         currentMatchIndex = -1;
-        
         // 修正: ヒット数を表示
         if(searchMatches.length > 0) {
             statsEl.textContent = `${searchMatches.length} found`;
