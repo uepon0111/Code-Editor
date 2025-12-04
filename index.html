@@ -648,13 +648,6 @@
             <button onclick="redo()" class="secondary" title="進める (Ctrl+Y)">
                 <svg class="icon" viewBox="0 0 24 24"><path d="M18.4 10.6C16.55 9 14.15 8 11.5 8c-4.65 0-8.58 3.03-9.96 7.22L3.9 16c1.05-3.19 4.05-5.5 7.6-5.5 1.95 0 3.73.72 5.12 1.88L13 16h9V7l-3.6 3.6z"/></svg>
             </button>
- 
-            <div class="sep"></div>
-
-            <span style="font-size:0.8rem; color:#888;">
-                <svg class="icon" style="width:12px; height:12px;" viewBox="0 0 24 24"><path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/></svg>
-                自動保存ON
-            </span>
             
             <div class="sep"></div>
 
@@ -800,11 +793,11 @@
     const consoleOutput = document.getElementById('consoleOutput');
     const fileTabBar = document.getElementById('fileTabBar');
     const homeScreen = document.getElementById('homeScreen');
-
+    
     // Pyodide State
     let pyodide = null;
     let pyodideReady = false;
-    
+
     // State
     let searchMatches = [];
     let currentMatchIndex = -1;
@@ -819,11 +812,9 @@
 
     // --- Window Load & Pyodide Init ---
     window.onload = async () => {
-        cleanupTrash(); 
-        
+        cleanupTrash();
         // Show Home instead of creating default file
         showHome();
-
         // Pyodide Load
         try {
             consoleOutput.textContent = "Python環境(Pyodide)をロード中...";
@@ -831,7 +822,6 @@
             await pyodide.loadPackage("micropip");
             pyodideReady = true;
             consoleOutput.textContent = "Python環境の準備完了。";
-            
             // Restore installed packages
             await restorePackages();
 
@@ -858,7 +848,6 @@
         document.querySelector('header').style.display = 'none';
         document.querySelector('.file-tab-bar').style.display = 'none';
         document.querySelector('.main-container').style.display = 'none';
-        
         renderHomeLists();
     }
 
@@ -877,7 +866,6 @@
         const historyData = getStorageData(HISTORY_KEY);
         // Sort by date desc
         historyData.sort((a, b) => new Date(b.date) - new Date(a.date));
-        
         historyList.innerHTML = '';
         if (historyData.length === 0) {
             historyList.innerHTML = '<li style="padding:10px; color:#666; text-align:center;">履歴はありません</li>';
@@ -943,12 +931,23 @@
         }
     }
 
+    // --- Validation Helper ---
+    function isValidExtension(name) {
+        return name.endsWith('.html') || name.endsWith('.py');
+    }
+
     function createNewFileFlow() {
         // Prompt for filename FIRST
         let name = prompt("新規ファイル名を入力してください (例: script.py, index.html):", "untitled.html");
         if (name === null) return; // Cancelled
         if (name.trim() === "") name = "untitled.html";
         
+        // Extension Check
+        if (!isValidExtension(name)) {
+            alert("拡張子は .html または .py のみ許可されています。");
+            return;
+        }
+
         hideHome();
         
         // Determine default content based on extension
@@ -980,7 +979,6 @@
                 item.deletedAt = Date.now();
                 item.pinned = false;
             });
-            
             setStorageData(HISTORY_KEY, []);
             setStorageData(TRASH_KEY, [...history, ...trash]);
         }
@@ -1028,7 +1026,6 @@
     // --- File Tabs Logic & Undo Stack ---
     function addNewFile(name, content, dbId = null) {
         const id = Date.now().toString() + Math.random().toString(16).slice(2);
-        
         const fileContent = content !== undefined ? content : '';
         
         let historyId = dbId;
@@ -1095,10 +1092,8 @@
 
     function closeFile(e, id) {
         e.stopPropagation();
-        
         const index = files.findIndex(f => f.id === id);
         files.splice(index, 1);
-        
         if (files.length === 0) {
             // If all files closed, go to Home
             showHome();
@@ -1120,6 +1115,12 @@
         if(!file) return;
         const newName = prompt("ファイル名を変更 (拡張子 .py でPythonモード):", file.name);
         if(newName && newName.trim() !== "") {
+            // Extension Check
+            if (!isValidExtension(newName)) {
+                alert("拡張子は .html または .py のみ許可されています。");
+                return;
+            }
+
             file.name = newName;
             renderFileTabs();
             updateHistoryTitle(file.dbId, newName);
@@ -1208,6 +1209,52 @@
         draggedTabId = null;
     }
 
+    // --- Mobile Touch Drag Logic ---
+    function handleTouchDragStart(e, id) {
+        draggedTabId = id;
+        e.target.closest('.file-tab').classList.add('dragging');
+    }
+
+    function handleTouchDragMove(e) {
+        if (!draggedTabId) return;
+        e.preventDefault(); // Stop scroll
+        
+        const touch = e.touches[0];
+        const target = document.elementFromPoint(touch.clientX, touch.clientY);
+        const tab = target?.closest('.file-tab');
+
+        document.querySelectorAll('.file-tab').forEach(t => t.classList.remove('drag-over'));
+        if (tab && tab.dataset.id !== draggedTabId) {
+            tab.classList.add('drag-over');
+        }
+    }
+
+    function handleTouchDragEnd(e) {
+        if (!draggedTabId) return;
+        
+        const touch = e.changedTouches[0];
+        const target = document.elementFromPoint(touch.clientX, touch.clientY);
+        const targetTab = target?.closest('.file-tab');
+        const targetId = targetTab?.dataset.id;
+
+        document.querySelectorAll('.file-tab').forEach(t => {
+            t.classList.remove('dragging');
+            t.classList.remove('drag-over');
+        });
+
+        if (targetId && draggedTabId !== targetId) {
+            const fromIndex = files.findIndex(f => f.id === draggedTabId);
+            const toIndex = files.findIndex(f => f.id === targetId);
+
+            if (fromIndex >= 0 && toIndex >= 0) {
+                const movedFile = files.splice(fromIndex, 1)[0];
+                files.splice(toIndex, 0, movedFile);
+                renderFileTabs();
+            }
+        }
+        draggedTabId = null;
+    }
+
     function renderFileTabs() {
         const addBtn = fileTabBar.querySelector('.add-tab-btn');
         fileTabBar.innerHTML = '';
@@ -1216,13 +1263,19 @@
             const div = document.createElement('div');
             div.className = `file-tab ${file.id === activeFileId ? 'active' : ''}`;
             div.title = "ダブルクリック/長押し/右クリックで名前変更、ドラッグで並べ替え";
-            
-            // Drag attributes
+            div.dataset.id = file.id; // For Touch Drag Identification
+
+            // Drag attributes (Desktop)
             div.draggable = true;
             div.ondragstart = (e) => handleTabDragStart(e, file.id);
             div.ondragover = (e) => handleTabDragOver(e);
             div.ondrop = (e) => handleTabDrop(e, file.id);
             div.ondragend = (e) => handleTabDragEnd(e);
+
+            // Drag attributes (Mobile)
+            div.addEventListener('touchstart', (e) => handleTouchDragStart(e, file.id), {passive: true});
+            div.addEventListener('touchmove', handleTouchDragMove, {passive: false});
+            div.addEventListener('touchend', handleTouchDragEnd);
 
             // Click to switch
             div.onclick = () => switchFile(file.id);
@@ -1325,7 +1378,6 @@
         indentOverlay.scrollTop = top;
         indentOverlay.scrollLeft = left;
     });
-
     let autoSaveDebounce = null;
     codeEditor.addEventListener('input', () => {
         const val = codeEditor.value;
@@ -1468,7 +1520,6 @@
 
         const consoleOut = document.getElementById('consoleOutput');
         consoleOut.textContent += `\nインストール済みパッケージを復元中 (${savedPkgs.length}個)...\n`;
-
         try {
             const micropip = pyodide.pyimport("micropip");
             for (const pkg of savedPkgs) {
@@ -1508,7 +1559,8 @@
             }
 
             input.value = '';
-            listPackages(); // refresh list
+            listPackages();
+            // refresh list
         } catch (err) {
             consoleOut.textContent += `Installation failed: ${err}\n`;
         }
@@ -1713,7 +1765,6 @@ for p in paths_to_check:
 
     // --- History & Trash System ---
     const historySidebar = document.getElementById('historySidebar');
-
     function toggleSidebar() {
         historySidebar.classList.toggle('open');
         if (historySidebar.classList.contains('open')) {
@@ -1803,6 +1854,12 @@ for p in paths_to_check:
 
         const newName = prompt("履歴のファイル名を変更:", item.title);
         if (newName && newName.trim() !== "") {
+            // Extension Check
+            if (!isValidExtension(newName)) {
+                alert("拡張子は .html または .py のみ許可されています。");
+                return;
+            }
+
             // Update storage
             updateHistoryTitle(dbId, newName);
             // Check if this file is currently open in tabs
