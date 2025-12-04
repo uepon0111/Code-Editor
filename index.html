@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Advanced Editor v4.4 (Home & Persistence)</title>
+    <title>Advanced Editor v4.6 (Fixed for Animation)</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-html.min.js"></script>
@@ -11,7 +11,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 
-    <script src="https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.js"></script>
+    <!-- Pyodide v0.26.2 (Updated for better Matplotlib support) -->
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.26.2/full/pyodide.js"></script>
 
     <style>
         :root {
@@ -236,17 +237,20 @@
             z-index: 1;
             pointer-events: none;
             padding: 10px; /* Match editor padding */
-            overflow: hidden; /* JavaScript handles scroll sync */
+            overflow: hidden;
+            /* JavaScript handles scroll sync */
         }
 
         .indent-row {
-            height: 21px; /* 14px font * 1.5 line-height = 21px */
+            height: 21px;
+            /* 14px font * 1.5 line-height = 21px */
             display: flex;
             align-items: center;
         }
 
         .indent-marker {
-            width: 2ch; /* Assuming 2 space indentation */
+            width: 2ch;
+            /* Assuming 2 space indentation */
             height: 100%;
             border-right: 1px dashed rgba(255, 255, 255, 0.25);
             flex-shrink: 0;
@@ -269,15 +273,15 @@
         pre[class*="language-"] { margin: 0; padding: 0; background: transparent; overflow: visible; }
         code[class*="language-"] { white-space: pre; }
 
-        /* --- 修正: 検索ハイライトの視認性向上 --- */
+        /* 修正: 検索ハイライトの視認性向上 */
         .backdrop mark {
             background-color: rgba(255, 215, 0, 0.4);
-            color: inherit; /* 修正: 文字色を透明にせず継承する */
+            color: inherit;
             border-radius: 2px;
         }
         .backdrop mark.current {
             background-color: #ff8c00;
-            color: white; /* 修正: 選択中は白文字で見やすく */
+            color: white;
             border: 1px solid orange;
         }
 
@@ -324,22 +328,79 @@
             flex: 1;
         }
         
-        /* Python Console Output */
-        #consoleOutput {
+        /* Python Output Area */
+        .python-output-container {
             display: none;
             flex: 1;
+            flex-direction: column;
+            overflow: hidden;
             background-color: var(--console-bg);
             color: #eee;
+        }
+        
+        /* Python Tab Bar (Console/Graph) */
+        .python-tab-bar {
+            display: flex;
+            background-color: #333;
+            border-bottom: 1px solid var(--border-color);
+            height: 30px;
+        }
+        
+        .python-sub-tab {
+            padding: 0 15px;
+            display: flex;
+            align-items: center;
+            font-size: 0.8rem;
+            cursor: pointer;
+            color: #aaa;
+            border-bottom: 2px solid transparent;
+        }
+        .python-sub-tab:hover { background-color: #3e3e3e; color: #ddd; }
+        .python-sub-tab.active {
+            color: white;
+            border-bottom-color: var(--success-color);
+            background-color: #252526;
+        }
+
+        /* Console Output */
+        #consoleOutput {
+            flex: 1;
+            margin: 0;
             padding: 15px;
             font-family: 'Consolas', 'Monaco', monospace;
             font-size: 14px;
             white-space: pre-wrap;
             overflow-y: auto;
             border: none;
-            margin: 0;
+            display: block; /* Default active */
         }
         #consoleOutput.error { color: #ff6b6b; }
         .console-loading { color: #aaa; font-style: italic; }
+
+        /* Visual/Graph Output */
+        #pythonVisualOutput {
+            display: none;
+            flex: 1;
+            overflow: auto;
+            padding: 20px;
+            text-align: center;
+            background-color: #1a1a1a;
+        }
+        #pythonVisualOutput img {
+            max-width: 100%;
+            border: 1px solid #444;
+            background-color: white; /* Graphs often have transparent bg */
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            margin-bottom: 20px;
+        }
+        /* Style for HTML widgets (Animation) */
+        #pythonVisualOutput .animation-box {
+            background: white;
+            color: black;
+            padding: 10px;
+            border-radius: 4px;
+            display: inline-block;
+        }
 
         /* --- Search Box --- */
         .search-panel {
@@ -579,13 +640,13 @@
 <div id="homeScreen">
     <div class="home-container">
         <div class="home-header">
-            <h1>Advanced Editor v4.4</h1>
+            <h1>Advanced Editor v4.6</h1>
             <p style="color:#888;">HTML / Python Web Editor with Persistence</p>
         </div>
 
         <div class="home-actions">
             <button onclick="createNewFileFlow()" class="success">
-                <svg class="icon" viewBox="0 0 24 24" style="margin-right:8px;"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+                 <svg class="icon" viewBox="0 0 24 24" style="margin-right:8px;"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
                 新規ファイル作成
             </button>
         </div>
@@ -593,14 +654,14 @@
         <div class="home-lists">
             <div class="home-card">
                 <h3>
-                    最近使用したファイル
+                     最近使用したファイル
                     <button class="secondary" onclick="deleteAllFromHome('history')" style="font-size:0.7rem;">一括削除</button>
                 </h3>
                 <ul id="homeHistoryList" class="home-file-list">
                     </ul>
             </div>
 
-            <div class="home-card">
+             <div class="home-card">
                 <h3>
                     ゴミ箱
                     <button class="danger" onclick="deleteAllFromHome('trash')" style="font-size:0.7rem;">ゴミ箱を空にする</button>
@@ -620,7 +681,7 @@
     <div class="view-controls">
         <button onclick="showHome()" class="secondary" style="margin-right:10px;">
             <svg class="icon" viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
-            ホーム
+             ホーム
         </button>
         <div class="view-tab active" id="tabCode" onclick="switchView('code')">
             コード編集
@@ -644,7 +705,7 @@
             <span id="currentModeLabel" class="mode-indicator mode-html">HTML</span>
 
             <button onclick="undo()" class="secondary" title="戻す (Ctrl+Z)">
-                <svg class="icon" viewBox="0 0 24 24"><path d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z"/></svg>
+                 <svg class="icon" viewBox="0 0 24 24"><path d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z"/></svg>
             </button>
             <button onclick="redo()" class="secondary" title="進める (Ctrl+Y)">
                 <svg class="icon" viewBox="0 0 24 24"><path d="M18.4 10.6C16.55 9 14.15 8 11.5 8c-4.65 0-8.58 3.03-9.96 7.22L3.9 16c1.05-3.19 4.05-5.5 7.6-5.5 1.95 0 3.73.72 5.12 1.88L13 16h9V7l-3.6 3.6z"/></svg>
@@ -662,7 +723,7 @@
                 <button onclick="togglePackagePanel()" class="secondary" title="ライブラリ管理">
                     <svg class="icon" viewBox="0 0 24 24"><path d="M20 6h-4V4c0-1.11-.89-2-2-2h-4c-1.11 0-2 .89-2 2v2H4c-1.11 0-1.99.89-1.99 2L2 19c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2zm-6 0h-4V4h4v2z"/></svg>
                     Pip
-                </button>
+                 </button>
             </div>
 
             <div style="flex:1;"></div>
@@ -678,7 +739,7 @@
         </div>
 
         <div id="searchPanel" class="search-panel">
-            <input type="text" id="searchInput" placeholder="検索文字列" oninput="highlightSearch()">
+             <input type="text" id="searchInput" placeholder="検索文字列" oninput="highlightSearch()">
             
             <span id="searchStats" style="font-size: 0.8rem; color: #ccc; margin: 0 5px; min-width: 40px; text-align: center;"></span>
 
@@ -695,13 +756,14 @@
             <div class="pkg-controls">
                 <span><b>Micropip パッケージ管理</b></span>
                 <input type="text" id="pkgNameInput" placeholder="パッケージ名 (例: numpy)">
-                <button onclick="installPackage()" class="success">インストール</button>
+                 <button onclick="installPackage()" class="success">インストール</button>
                 <div class="sep"></div>
                 <button onclick="listPackages()" class="secondary" title="インストール済み一覧を表示">一覧更新</button>
                 <button onclick="resetPython()" class="danger">環境リセット</button>
             </div>
             <div id="pkgList" class="pkg-list">
-                <div style="text-align:center; color:#888; padding:10px;">「一覧更新」を押してパッケージを表示</div>
+               
+ <div style="text-align:center; color:#888; padding:10px;">「一覧更新」を押してパッケージを表示</div>
             </div>
         </div>
 
@@ -710,7 +772,7 @@
             <div class="code-container" id="codeContainer">
                 <div class="indent-overlay" id="indentOverlay"></div>
                 <div class="backdrop code-font-style" id="codeBackdrop"></div>
-                <textarea id="codeEditor" class="code-font-style" spellcheck="false" placeholder="ここにコードを入力..."></textarea>
+                 <textarea id="codeEditor" class="code-font-style" spellcheck="false" placeholder="ここにコードを入力..."></textarea>
             </div>
         </div>
     </div>
@@ -724,14 +786,27 @@
                    <svg class="icon" viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg> UI切替
                 </button>
                 <button onclick="updatePreview()" class="success" style="color:white;">
-                    <svg class="icon" viewBox="0 0 24 24" style="fill:white;"><path d="M8 5v14l11-7z"/></svg>
+                     <svg class="icon" viewBox="0 0 24 24" style="fill:white;"><path d="M8 5v14l11-7z"/></svg>
                     実行/更新 (Ctrl+Enter)
                 </button>
             </div>
         </div>
         
         <iframe id="previewFrame"></iframe>
-        <pre id="consoleOutput">Python環境を準備中...</pre>
+
+        <!-- Python Output Section (Console & Visuals) -->
+        <div id="pythonOutputContainer" class="python-output-container">
+            <div class="python-tab-bar">
+                <div id="pyTabConsole" class="python-sub-tab active" onclick="switchPythonPreviewTab('console')">
+                    Console
+                </div>
+                <div id="pyTabVisual" class="python-sub-tab" onclick="switchPythonPreviewTab('visual')">
+                    Graph / Output
+                </div>
+            </div>
+            <pre id="consoleOutput">Python環境を準備中...</pre>
+            <div id="pythonVisualOutput"></div>
+        </div>
     </div>
 
 </div>
@@ -774,6 +849,9 @@
     const indentOverlay = document.getElementById('indentOverlay');
     const previewFrame = document.getElementById('previewFrame');
     const consoleOutput = document.getElementById('consoleOutput');
+    const pythonOutputContainer = document.getElementById('pythonOutputContainer');
+    const pythonVisualOutput = document.getElementById('pythonVisualOutput');
+    
     const fileTabBar = document.getElementById('fileTabBar');
     const homeScreen = document.getElementById('homeScreen');
     
@@ -819,7 +897,7 @@
             if (sidebar.classList.contains('open') && 
                 !sidebar.contains(e.target) && 
                 !e.target.closest('.toggle-sidebar-btn')) {
-                toggleSidebar();
+                 toggleSidebar();
             }
         });
     };
@@ -864,18 +942,18 @@
                 
                 li.innerHTML = `
                     <div onclick="openFileFromHome(${item.id})" style="cursor:pointer; flex:1;">
-                        <span style="font-weight:bold; display:block;">${escapeHtml(item.title)}</span>
+                         <span style="font-weight:bold; display:block;">${escapeHtml(item.title)}</span>
                         <span style="font-size:0.75rem; color:#888;">${dateStr}</span>
                     </div>
                     <div>
-                        <button class="icon-btn" onclick="renameHistoryItem(${item.id}); renderHomeLists();" title="名前変更">
+                         <button class="icon-btn" onclick="renameHistoryItem(${item.id}); renderHomeLists();" title="名前変更">
                             <svg class="icon" viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
                         </button>
-                        <button class="icon-btn danger" onclick="softDeleteHistory(${item.id}); renderHomeLists();" title="削除">
+                     <button class="icon-btn danger" onclick="softDeleteHistory(${item.id}); renderHomeLists();" title="削除">
                             <svg class="icon" viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
                         </button>
                     </div>
-                `;
+                 `;
                 historyList.appendChild(li);
             });
         }
@@ -893,22 +971,22 @@
                 li.className = 'history-item';
                 li.style.display = 'flex';
                 li.style.justifyContent = 'space-between';
-                li.style.alignItems = 'center';
+                 li.style.alignItems = 'center';
                 
                 li.innerHTML = `
                     <div style="flex:1;">
                         <span style="font-weight:bold; display:block;">${escapeHtml(item.title)}</span>
-                        <span style="font-size:0.75rem; color:#888;">削除待機中</span>
+                         <span style="font-size:0.75rem; color:#888;">削除待機中</span>
                     </div>
                     <div>
                         <button class="icon-btn success" onclick="restoreTrashItem(${item.id}); renderHomeLists();" title="復元">
-                            <svg class="icon" viewBox="0 0 24 24"><path d="M14 12c0-1.1-.9-2-2-2s-2 .9-2 2 .9 2 2 2 2-.9 2-2zm-2-9c-4.97 0-9 4.03-9 9H0l4 4 4-4H5c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.51 0-2.91-.49-4.06-1.3l-1.42 1.44C8.04 20.3 9.94 21 12 21c4.97 0 9-4.03 9-9s-4.03-9-9-9z"/></svg>
+                             <svg class="icon" viewBox="0 0 24 24"><path d="M14 12c0-1.1-.9-2-2-2s-2 .9-2 2 .9 2 2 2 2-.9 2-2zm-2-9c-4.97 0-9 4.03-9 9H0l4 4 4-4H5c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.51 0-2.91-.49-4.06-1.3l-1.42 1.44C8.04 20.3 9.94 21 12 21c4.97 0 9-4.03 9-9s-4.03-9-9-9z"/></svg>
                         </button>
-                        <button class="icon-btn danger" onclick="permDeleteTrashItem(${item.id}); renderHomeLists();" title="完全削除">
+                     <button class="icon-btn danger" onclick="permDeleteTrashItem(${item.id}); renderHomeLists();" title="完全削除">
                             <svg class="icon" viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
                         </button>
                     </div>
-                `;
+                 `;
                 trashList.appendChild(li);
             });
         }
@@ -970,21 +1048,21 @@
             switch(e.key.toLowerCase()) {
                 case 's': // Save
                     e.preventDefault();
-                    console.log("Auto-saved");
+                     console.log("Auto-saved");
                     break;
                 case 'f': // Find
                     e.preventDefault();
                     if(homeScreen.style.display !== 'none') return;
-                    toggleSearchPanel();
+                     toggleSearchPanel();
                     break;
                 case 'enter': // Preview / Run
                     e.preventDefault();
                     if(homeScreen.style.display !== 'none') return;
-                    if (document.getElementById('tabCode').classList.contains('active')) {
+                     if (document.getElementById('tabCode').classList.contains('active')) {
                         switchView('preview');
                     } else {
                         updatePreview();
-                    }
+                     }
                     break;
                 case 'z': // Undo
                     e.preventDefault();
@@ -1016,7 +1094,7 @@
             content: fileContent,
             history: [fileContent],
             historyIndex: 0    
-        });
+         });
 
         switchFile(id);
     }
@@ -1240,7 +1318,7 @@
             div.dataset.id = file.id; // For Touch Drag Identification
 
             // Drag attributes (Desktop)
-            div.draggable = true;
+             div.draggable = true;
             div.ondragstart = (e) => handleTabDragStart(e, file.id);
             div.ondragover = (e) => handleTabDragOver(e);
             div.ondrop = (e) => handleTabDrop(e, file.id);
@@ -1360,6 +1438,7 @@
             file.content = val;
             clearTimeout(autoSaveDebounce);
             autoSaveDebounce = setTimeout(() => {
+                
                 updateHistoryContent(file.dbId, val);
             }, 1000);
         }
@@ -1372,6 +1451,7 @@
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => {
             pushHistory(val);
+        
         }, 500);
     });
 
@@ -1441,19 +1521,62 @@
     }
 
     // --- Preview & Python Execution ---
+    function switchPythonPreviewTab(mode) {
+        document.getElementById('pyTabConsole').className = `python-sub-tab ${mode === 'console' ? 'active' : ''}`;
+        document.getElementById('pyTabVisual').className = `python-sub-tab ${mode === 'visual' ? 'active' : ''}`;
+        
+        document.getElementById('consoleOutput').style.display = mode === 'console' ? 'block' : 'none';
+        document.getElementById('pythonVisualOutput').style.display = mode === 'visual' ? 'block' : 'none';
+    }
+
+    function showPythonImage(base64Str) {
+        const img = document.createElement('img');
+        img.src = "data:image/png;base64," + base64Str;
+        pythonVisualOutput.appendChild(img);
+        switchPythonPreviewTab('visual');
+    }
+    // Make it global so Python can call it
+    window.showPythonImage = showPythonImage;
+
+    // Helper to inject HTML with scripts (for animation widgets)
+    function injectRichHTML(htmlStr) {
+        const div = document.createElement('div');
+        div.className = 'animation-box';
+        div.innerHTML = htmlStr;
+        pythonVisualOutput.appendChild(div);
+        
+        // Execute scripts found in the injected HTML
+        const scripts = div.querySelectorAll('script');
+        scripts.forEach(oldScript => {
+            const newScript = document.createElement('script');
+            Array.from(oldScript.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value));
+            newScript.appendChild(document.createTextNode(oldScript.innerHTML));
+            oldScript.parentNode.replaceChild(newScript, oldScript);
+        });
+        
+        switchPythonPreviewTab('visual');
+    }
+
     async function updatePreview() {
         const file = files.find(f => f.id === activeFileId);
         if (!file) return;
 
         const isPython = file.name.endsWith('.py');
         const prevFrame = document.getElementById('previewFrame');
+        const pythonContainer = document.getElementById('pythonOutputContainer');
         const consoleOut = document.getElementById('consoleOutput');
         const prevTitle = document.getElementById('previewTitle');
+        
         if (isPython) {
             prevFrame.style.display = 'none';
-            consoleOut.style.display = 'block';
-            prevTitle.textContent = 'Python Console';
+            pythonContainer.style.display = 'flex';
+            prevTitle.textContent = 'Python Console / Output';
             
+            // Clear previous outputs
+            consoleOut.textContent = "";
+            pythonVisualOutput.innerHTML = "";
+            switchPythonPreviewTab('console'); // Reset to console view
+
             if (!pyodideReady) {
                 consoleOut.textContent = "Python環境をロード中...";
                 return;
@@ -1461,11 +1584,74 @@
 
             consoleOut.textContent = "実行中...\n";
             consoleOut.className = "";
+
+            // Auto-load packages from imports (Crucial for matplotlib/numpy)
+            try {
+                await pyodide.loadPackagesFromImports(codeEditor.value);
+            } catch (e) {
+                consoleOut.textContent += `Package loading warning: ${e}\n`;
+            }
+            
+            // Patch Code to redirect plt.show() and mock IPython
+            const patchCode = `
+import sys
+import js
+import io
+import base64
+
+# 1. Patch matplotlib.pyplot.show
+try:
+    import matplotlib.pyplot as plt
+    def _custom_show():
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png')
+        buf.seek(0)
+        img_str = base64.b64encode(buf.read()).decode('utf-8')
+        js.showPythonImage(img_str)
+        plt.clf()
+    plt.show = _custom_show
+except ImportError:
+    pass
+
+# 2. Mock IPython.display.HTML if missing (for animation support)
+if "IPython" not in sys.modules:
+    import types
+    ipy = types.ModuleType("IPython")
+    disp = types.ModuleType("display")
+    
+    class HTML:
+        def __init__(self, data):
+            self.data = data
+        def _repr_html_(self):
+            return self.data
+            
+    disp.HTML = HTML
+    ipy.display = disp
+    sys.modules["IPython"] = ipy
+    sys.modules["IPython.display"] = disp
+`;
+
             try {
                 pyodide.setStdout({ batched: (msg) => {
                     consoleOut.textContent += msg + "\n";
                 }});
-                await pyodide.runPythonAsync(codeEditor.value);
+                
+                // Run patch then user code
+                let result = await pyodide.runPythonAsync(patchCode + "\n" + codeEditor.value);
+                
+                // Check if the last expression returned an HTML object (like animation)
+                if (result) {
+                    try {
+                        // Check for _repr_html_ (IPython standard)
+                        if (result._repr_html_) {
+                            const htmlContent = result._repr_html_();
+                            injectRichHTML(htmlContent);
+                        }
+                    } catch(e) {
+                        // ignore if not HTML
+                    }
+                }
+
             } catch (err) {
                 consoleOut.textContent += `\nError:\n${err}`;
                 consoleOut.classList.add('error');
@@ -1473,7 +1659,7 @@
 
         } else {
             prevFrame.style.display = 'block';
-            consoleOut.style.display = 'none';
+            pythonContainer.style.display = 'none';
             prevTitle.textContent = 'Browser Preview';
             
             const doc = prevFrame.contentDocument || prevFrame.contentWindow.document;
@@ -1503,7 +1689,7 @@
             const micropip = pyodide.pyimport("micropip");
             for (const pkg of savedPkgs) {
                  await micropip.install(pkg);
-                 console.log(`Restored package: ${pkg}`);
+                console.log(`Restored package: ${pkg}`);
             }
             consoleOut.textContent += `パッケージの復元が完了しました。\n`;
         } catch (err) {
@@ -1519,9 +1705,10 @@
         const consoleOut = document.getElementById('consoleOutput');
         switchView('preview');
         const file = files.find(f => f.id === activeFileId);
-        if(!file.name.endsWith('.py')) {
-            document.getElementById('previewFrame').style.display = 'none';
-            consoleOut.style.display = 'block';
+        // Force python UI if needed
+        if(file && !file.name.endsWith('.py')) {
+             document.getElementById('previewFrame').style.display = 'none';
+             document.getElementById('pythonOutputContainer').style.display = 'flex';
         }
 
         consoleOut.textContent += `\n> Installing ${pkg}...\n`;
@@ -1562,7 +1749,7 @@
                     <span style="font-family:monospace;">${escapeHtml(pkg)}</span>
                     <button class="icon-btn danger" onclick="deletePackage('${escapeHtml(pkg)}')" title="削除 (アンロード)">✕</button>
                 </li>
-            `;
+             `;
         });
         html += '</ul>';
         listContainer.innerHTML = html;
@@ -1657,7 +1844,7 @@ for p in paths_to_check:
         
         if (!term) {
             syncBackdrop();
-            searchMatches = [];
+             searchMatches = [];
             statsEl.textContent = '';
             return;
         }
@@ -1676,7 +1863,6 @@ for p in paths_to_check:
         codeBackdrop.scrollLeft = codeEditor.scrollLeft;
         searchMatches = codeBackdrop.querySelectorAll('mark');
         currentMatchIndex = -1;
-        
         // 修正: ヒット数を表示
         if(searchMatches.length > 0) {
             statsEl.textContent = `${searchMatches.length} found`;
@@ -1979,7 +2165,7 @@ for p in paths_to_check:
             if (sortMode === 'dateDesc') return new Date(b.date) - new Date(a.date);
             if (sortMode === 'dateAsc') return new Date(a.date) - new Date(b.date);
             if (sortMode === 'nameAsc') return a.title.localeCompare(b.title);
-            return 0;
+             return 0;
         });
         list.innerHTML = '';
         if (data.length === 0) {
@@ -1998,6 +2184,7 @@ for p in paths_to_check:
             // Icons
             const pinIcon = `<svg class="icon" viewBox="0 0 24 24"><path d="M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3z"/></svg>`;
             const trashIcon = `<svg class="icon" viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>`;
+        
             const restoreIcon = `<svg class="icon" viewBox="0 0 24 24"><path d="M14 12c0-1.1-.9-2-2-2s-2 .9-2 2 .9 2 2 2 2-.9 2-2zm-2-9c-4.97 0-9 4.03-9 9H0l4 4 4-4H5c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.51 0-2.91-.49-4.06-1.3l-1.42 1.44C8.04 20.3 9.94 21 12 21c4.97 0 9-4.03 9-9s-4.03-9-9-9z"/></svg>`;
             const deleteForeverIcon = `<svg class="icon" viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>`;
             const editIcon = `<svg class="icon" viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>`;
@@ -2012,7 +2199,7 @@ for p in paths_to_check:
                     <button class="icon-btn" onclick="event.stopPropagation(); renameHistoryItem(${item.id})" title="名前変更">${editIcon}</button>
                     <button class="icon-btn ${item.pinned ? 'active' : ''}" onclick="event.stopPropagation(); togglePin(${item.id})" title="ピン留め">${pinIcon}</button>
                     <button class="icon-btn danger" onclick="event.stopPropagation(); softDeleteHistory(${item.id})" title="削除（ゴミ箱へ）">${trashIcon}</button>
-                `;
+                 `;
             }
 
             li.innerHTML = `
