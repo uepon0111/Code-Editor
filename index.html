@@ -236,20 +236,19 @@
             z-index: 1;
             pointer-events: none;
             padding: 10px; /* Match editor padding */
+            overflow: hidden; /* JavaScript handles scroll sync */
         }
 
         .indent-row {
-            height: 21px;
-            /* 14px font * 1.5 line-height = 21px */
+            height: 21px; /* 14px font * 1.5 line-height = 21px */
             display: flex;
             align-items: center;
         }
 
         .indent-marker {
-            width: 2ch;
-            /* Assuming 2 space indentation */
+            width: 2ch; /* Assuming 2 space indentation */
             height: 100%;
-            border-right: 1px solid rgba(255, 255, 255, 0.1); /* Subtle line */
+            border-right: 1px dashed rgba(255, 255, 255, 0.25);
             flex-shrink: 0;
         }
 
@@ -270,13 +269,15 @@
         pre[class*="language-"] { margin: 0; padding: 0; background: transparent; overflow: visible; }
         code[class*="language-"] { white-space: pre; }
 
+        /* --- 修正: 検索ハイライトの視認性向上 --- */
         .backdrop mark {
-            background-color: rgba(255, 255, 0, 0.3);
-            color: transparent;
+            background-color: rgba(255, 215, 0, 0.4);
+            color: inherit; /* 修正: 文字色を透明にせず継承する */
             border-radius: 2px;
         }
         .backdrop mark.current {
-            background-color: rgba(255, 165, 0, 0.6);
+            background-color: #ff8c00;
+            color: white; /* 修正: 選択中は白文字で見やすく */
             border: 1px solid orange;
         }
 
@@ -679,6 +680,8 @@
         <div id="searchPanel" class="search-panel">
             <input type="text" id="searchInput" placeholder="検索文字列" oninput="highlightSearch()">
             
+            <span id="searchStats" style="font-size: 0.8rem; color: #ccc; margin: 0 5px; min-width: 40px; text-align: center;"></span>
+
             <button onclick="findNext()" class="icon-btn" title="次へ">
                 <svg class="icon" viewBox="0 0 24 24"><path d="M20 12l-1.41-1.41L13 16.17V4h-2v12.17l-5.58-5.59L4 12l8 8 8-8z"/></svg>
             </button>
@@ -761,28 +764,8 @@
 
 <script>
     // --- Initial Config & Data ---
-    const defaultHtml = `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<style>
-  body { font-family: sans-serif; padding: 20px; line-height: 1.6; }
-  h1 { color: #007acc; border-bottom: 2px solid #ddd; }
-  .box { background: #f9f9f9; padding: 15px; border-radius: 5px; }
-</style>
-</head>
-<body>
-  <h1>HTML Editor v4.3</h1>
-  <div class="box">
-    <p>改善点:</p>
-    <ul>
-        <li><b>ホーム画面</b>: 起動時にホーム画面を表示するようにしました。</li>
-        <li><b>パッケージ永続化</b>: インストールしたライブラリは次回起動時も維持されます。</li>
-        <li><b>命名必須</b>: 新規作成時にファイル名を決定するようにしました。</li>
-    </ul>
-  </div>
-</body>
-</html>`;
+    // (Deprecated defaultHtml - keeping variable to prevent errors but it's empty now)
+    const defaultHtml = ""; 
 
     // Elements
     const codeEditor = document.getElementById('codeEditor');
@@ -950,14 +933,8 @@
 
         hideHome();
         
-        // Determine default content based on extension
+        // Start with empty content
         let content = '';
-        if (name.endsWith('.py')) {
-            content = `# ${name}\nimport sys\nprint("Hello Python!")`;
-        } else {
-            content = defaultHtml.replace('HTML Editor v4.3', name);
-        }
-
         addNewFile(name, content);
     }
 
@@ -1022,7 +999,6 @@
             }
         }
     });
-
     // --- File Tabs Logic & Undo Stack ---
     function addNewFile(name, content, dbId = null) {
         const id = Date.now().toString() + Math.random().toString(16).slice(2);
@@ -1217,7 +1193,8 @@
 
     function handleTouchDragMove(e) {
         if (!draggedTabId) return;
-        e.preventDefault(); // Stop scroll
+        e.preventDefault();
+        // Stop scroll
         
         const touch = e.touches[0];
         const target = document.elementFromPoint(touch.clientX, touch.clientY);
@@ -1231,17 +1208,14 @@
 
     function handleTouchDragEnd(e) {
         if (!draggedTabId) return;
-        
         const touch = e.changedTouches[0];
         const target = document.elementFromPoint(touch.clientX, touch.clientY);
         const targetTab = target?.closest('.file-tab');
         const targetId = targetTab?.dataset.id;
-
         document.querySelectorAll('.file-tab').forEach(t => {
             t.classList.remove('dragging');
             t.classList.remove('drag-over');
         });
-
         if (targetId && draggedTabId !== targetId) {
             const fromIndex = files.findIndex(f => f.id === draggedTabId);
             const toIndex = files.findIndex(f => f.id === targetId);
@@ -1419,12 +1393,16 @@
         }
     }
 
-    // --- Smart Indent Guides ---
+    // --- Smart Indent Guides (修正版) ---
     function updateIndentGuides() {
         const code = codeEditor.value;
         const lines = code.split('\n');
         
-        let html = '';
+        // 修正: エディタの内容幅に合わせてコンテナの幅を強制する
+        // これにより、横スクロール時にインデントガイドも正しくスクロールされる
+        const scrollWidth = codeEditor.scrollWidth;
+        let html = `<div style="min-width: ${scrollWidth}px; height: 100%;">`;
+        
         const tabSize = 2;
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i];
@@ -1438,6 +1416,7 @@
             rowHtml += '</div>';
             html += rowHtml;
         }
+        html += '</div>';
         
         indentOverlay.innerHTML = html;
         indentOverlay.scrollTop = codeEditor.scrollTop;
@@ -1661,6 +1640,8 @@ for p in paths_to_check:
             document.getElementById('searchInput').focus();
         } else {
             document.getElementById('searchInput').value = '';
+            // Clear stats
+            document.getElementById('searchStats').textContent = '';
             syncBackdrop();
         }
     }
@@ -1672,10 +1653,12 @@ for p in paths_to_check:
     function highlightSearch() {
         const term = document.getElementById('searchInput').value;
         const text = codeEditor.value;
+        const statsEl = document.getElementById('searchStats');
         
         if (!term) {
             syncBackdrop();
             searchMatches = [];
+            statsEl.textContent = '';
             return;
         }
 
@@ -1693,10 +1676,19 @@ for p in paths_to_check:
         codeBackdrop.scrollLeft = codeEditor.scrollLeft;
         searchMatches = codeBackdrop.querySelectorAll('mark');
         currentMatchIndex = -1;
+        
+        // 修正: ヒット数を表示
+        if(searchMatches.length > 0) {
+            statsEl.textContent = `${searchMatches.length} found`;
+        } else {
+            statsEl.textContent = `0 found`;
+        }
     }
 
     function findNext() {
+        const statsEl = document.getElementById('searchStats');
         if (searchMatches.length === 0) return;
+        
         if (currentMatchIndex >= 0 && searchMatches[currentMatchIndex]) {
             searchMatches[currentMatchIndex].classList.remove('current');
         }
@@ -1704,8 +1696,13 @@ for p in paths_to_check:
         const target = searchMatches[currentMatchIndex];
         target.classList.add('current');
         target.scrollIntoView({ block: "center", inline: "nearest" });
+        
+        // Editor scroll update logic is handled by scrollIntoView but we need to sync backdrop
         codeEditor.scrollTop = codeBackdrop.scrollTop;
         codeEditor.scrollLeft = codeBackdrop.scrollLeft;
+
+        // 修正: 現在位置を表示 (例: 1 / 5)
+        statsEl.textContent = `${currentMatchIndex + 1} / ${searchMatches.length}`;
     }
 
     function doReplace() {
