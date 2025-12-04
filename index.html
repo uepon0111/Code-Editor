@@ -3,12 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Advanced HTML Editor v3 (Auto-Save & Highlight)</title>
+    <title>Advanced Editor v4.3 (Smart Guides)</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-html.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-css.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.js"></script>
 
     <style>
         :root {
@@ -23,6 +26,7 @@
             --icon-color: #cccccc;
             --danger-color: #d32f2f;
             --success-color: #388e3c;
+            --console-bg: #0c0c0c;
         }
 
         * { box-sizing: border-box; }
@@ -60,7 +64,7 @@
             overflow-x: auto;
             border-bottom: 1px solid var(--border-color);
             height: 35px;
-            flex-shrink: 0; /* Zen mode logic safeguard */
+            flex-shrink: 0;
         }
         
         .file-tab {
@@ -76,12 +80,27 @@
             min-width: 100px;
             justify-content: space-between;
             user-select: none;
+            transition: background-color 0.2s;
+        }
+
+        /* Drag & Drop Styles */
+        .file-tab.dragging {
+            opacity: 0.5;
+            background-color: #444;
+        }
+        .file-tab.drag-over {
+            border-left: 2px solid var(--accent-color);
         }
 
         .file-tab.active {
             background-color: var(--tab-active-bg);
             color: var(--text-color);
             border-top: 2px solid var(--accent-color);
+        }
+
+        /* Visual feedback for long press */
+        .file-tab.pressing {
+            background-color: #444;
         }
 
         .file-tab-close {
@@ -181,6 +200,7 @@
             user-select: none;
             overflow: hidden;
             flex-shrink: 0;
+            z-index: 5;
         }
 
         /* Code Container */
@@ -201,6 +221,31 @@
             word-wrap: normal;
         }
 
+        /* Smart Indent Overlay */
+        .indent-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%; /* Scrolls with content */
+            z-index: 1;
+            pointer-events: none;
+            padding: 10px; /* Match editor padding */
+        }
+
+        .indent-row {
+            height: 21px; /* 14px font * 1.5 line-height = 21px */
+            display: flex;
+            align-items: center;
+        }
+
+        .indent-marker {
+            width: 2ch; /* Assuming 2 space indentation */
+            height: 100%;
+            border-right: 1px solid rgba(255, 255, 255, 0.1); /* Subtle line */
+            flex-shrink: 0;
+        }
+
         /* Backdrop (Syntax Highlight) */
         .backdrop {
             position: absolute;
@@ -208,11 +253,10 @@
             left: 0;
             width: 100%;
             height: 100%;
-            z-index: 1;
+            z-index: 2;
             pointer-events: none;
             overflow: hidden;
             color: var(--text-color);
-            /* Fallback */
         }
         
         /* Prism overrides */
@@ -237,13 +281,12 @@
             width: 100%;
             height: 100%;
             background: transparent;
-            /* Transparent Text so backdrop shows through */
             color: transparent;
             caret-color: white; 
             border: none;
             resize: none;
             outline: none;
-            z-index: 2;
+            z-index: 3;
             overflow: auto;
         }
         
@@ -272,6 +315,23 @@
             background-color: white;
             flex: 1;
         }
+        
+        /* Python Console Output */
+        #consoleOutput {
+            display: none; /* Toggled via JS */
+            flex: 1;
+            background-color: var(--console-bg);
+            color: #eee;
+            padding: 15px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 14px;
+            white-space: pre-wrap;
+            overflow-y: auto;
+            border: none;
+            margin: 0;
+        }
+        #consoleOutput.error { color: #ff6b6b; }
+        .console-loading { color: #aaa; font-style: italic; }
 
         /* --- Search Box --- */
         .search-panel {
@@ -283,6 +343,46 @@
             gap: 5px;
         }
         .search-panel.active { display: flex; flex-wrap: wrap; }
+        
+        /* --- Package Manager Box --- */
+        .package-panel {
+            display: none;
+            background: #252526;
+            padding: 6px 10px;
+            border-bottom: 1px solid var(--border-color);
+            flex-direction: column;
+            gap: 5px;
+            color: #eee;
+            font-size: 0.85rem;
+            max-height: 250px;
+            overflow-y: auto;
+        }
+        .package-panel.active { display: flex; }
+        
+        .pkg-controls {
+            display: flex; 
+            align-items: center;
+            gap: 5px;
+            flex-wrap: wrap;
+        }
+
+        .pkg-list {
+            margin-top: 5px;
+            border-top: 1px solid var(--border-color);
+            padding-top: 5px;
+        }
+        .pkg-list ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .pkg-list li {
+            display: flex;
+            justify-content: space-between;
+            padding: 3px 0;
+            border-bottom: 1px solid #333;
+        }
+        .pkg-list li:hover { background: #333; }
 
         /* --- Sidebar (History & Trash) --- */
         .history-sidebar {
@@ -384,6 +484,10 @@
             font-size: 0.85rem;
         }
         input:focus { border-color: var(--accent-color); outline: none; }
+        
+        .mode-indicator { font-size: 0.75rem; margin-right: 10px; font-weight: bold; padding: 2px 5px; border-radius: 3px;}
+        .mode-html { color: #e34c26; border: 1px solid #e34c26; }
+        .mode-python { color: #3572A5; border: 1px solid #3572A5; }
     </style>
 </head>
 <body>
@@ -398,7 +502,7 @@
             コード編集
         </div>
         <div class="view-tab" id="tabPreview" onclick="switchView('preview')">
-            プレビュー (Ctrl+Enter)
+            実行 / プレビュー (Ctrl+Enter)
         </div>
     </div>
     <div class="header-controls">
@@ -413,13 +517,15 @@
 
     <div id="viewCode" class="view-section active">
         <div class="toolbar">
+            <span id="currentModeLabel" class="mode-indicator mode-html">HTML</span>
+
             <button onclick="undo()" class="secondary" title="戻す (Ctrl+Z)">
                 <svg class="icon" viewBox="0 0 24 24"><path d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z"/></svg>
             </button>
             <button onclick="redo()" class="secondary" title="進める (Ctrl+Y)">
                 <svg class="icon" viewBox="0 0 24 24"><path d="M18.4 10.6C16.55 9 14.15 8 11.5 8c-4.65 0-8.58 3.03-9.96 7.22L3.9 16c1.05-3.19 4.05-5.5 7.6-5.5 1.95 0 3.73.72 5.12 1.88L13 16h9V7l-3.6 3.6z"/></svg>
             </button>
-    
+ 
             <div class="sep"></div>
 
             <span style="font-size:0.8rem; color:#888;">
@@ -433,10 +539,20 @@
                 <svg class="icon" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
                 検索
             </button>
+            
+            <div id="pythonControls" style="display:none; gap:8px;">
+                <div class="sep"></div>
+                <button onclick="togglePackagePanel()" class="secondary" title="ライブラリ管理">
+                    <svg class="icon" viewBox="0 0 24 24"><path d="M20 6h-4V4c0-1.11-.89-2-2-2h-4c-1.11 0-2 .89-2 2v2H4c-1.11 0-1.99.89-1.99 2L2 19c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2zm-6 0h-4V4h4v2z"/></svg>
+                    Pip
+                </button>
+            </div>
+
             <div style="flex:1;"></div>
             <select id="downloadFormat">
                 <option value="html">.html</option>
                 <option value="txt">.txt</option>
+                <option value="py">.py</option>
             </select>
             <button onclick="downloadCode()">
                 <svg class="icon" viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
@@ -456,9 +572,25 @@
             <button onclick="doReplaceAll()" class="secondary">全置換</button>
         </div>
 
+        <div id="packagePanel" class="package-panel">
+            <div class="pkg-controls">
+                <span><b>Micropip パッケージ管理</b></span>
+                <input type="text" id="pkgNameInput" placeholder="パッケージ名 (例: numpy)">
+                <button onclick="installPackage()" class="success">インストール</button>
+                <div class="sep"></div>
+                <button onclick="listPackages()" class="secondary" title="インストール済み一覧を表示">一覧更新</button>
+                <button onclick="resetPython()" class="danger">環境リセット</button>
+            </div>
+            <div id="pkgList" class="pkg-list">
+                <div style="text-align:center; color:#888; padding:10px;">「一覧更新」を押してパッケージを表示</div>
+            </div>
+        </div>
+
         <div class="editor-wrapper">
             <div class="line-numbers" id="lineNumbers">1</div>
             <div class="code-container" id="codeContainer">
+                <div class="indent-overlay" id="indentOverlay"></div>
+                
                 <div class="backdrop code-font-style" id="codeBackdrop"></div>
                 <textarea id="codeEditor" class="code-font-style" spellcheck="false" placeholder="ここにコードを入力..."></textarea>
             </div>
@@ -467,19 +599,21 @@
 
     <div id="viewPreview" class="view-section">
         <div class="toolbar" style="background: #f0f0f0; border-bottom: 1px solid #ccc; color: #333;">
-            <strong>Browser Preview</strong>
+            <strong id="previewTitle">Preview</strong>
             
             <div style="margin-left: auto; display: flex; gap: 5px;">
                 <button onclick="toggleZenMode()" class="secondary" title="ヘッダーやタブを非表示">
                    <svg class="icon" viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg> UI切替
                 </button>
-                <button onclick="updatePreview()" class="secondary" style="color:white;">
-                    <svg class="icon" viewBox="0 0 24 24" style="fill:white;"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
-                    更新 (Ctrl+Enter)
+                <button onclick="updatePreview()" class="success" style="color:white;">
+                    <svg class="icon" viewBox="0 0 24 24" style="fill:white;"><path d="M8 5v14l11-7z"/></svg>
+                    実行/更新 (Ctrl+Enter)
                 </button>
             </div>
         </div>
+        
         <iframe id="previewFrame"></iframe>
+        <pre id="consoleOutput">Python環境を準備中...</pre>
     </div>
 
 </div>
@@ -497,7 +631,7 @@
                 <svg class="icon" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
             </button>
         </div>
-        
+       
         <input type="text" id="historySearch" placeholder="検索..." oninput="renderSidebarContent()">
         <select id="historySort" onchange="renderSidebarContent()">
             <option value="dateDesc">新しい順</option>
@@ -512,7 +646,7 @@
 
 <script>
     // --- Initial Config & Data ---
-    const defaultCode = `<!DOCTYPE html>
+    const defaultHtml = `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
@@ -523,38 +657,73 @@
 </style>
 </head>
 <body>
-  <h1>HTML Editor v3</h1>
+  <h1>HTML Editor v4.3</h1>
   <div class="box">
-    <p>構文ハイライト機能を追加しました。</p>
-    <p>変更は履歴に<b>自動保存</b>されます。</p>
-    <p>タブをダブルクリックして名前を変更できます。</p>
+    <p>改善点:</p>
+    <ul>
+        <li><b>スマート・インデントガイド</b>: インデントがある場所にのみ縦線が表示されるようになりました。</li>
+        <li><b>タブ操作</b>: ドラッグ中に名前変更画面が出ないように修正しました。</li>
+    </ul>
   </div>
 </body>
 </html>`;
+
+    const defaultPython = `# Python Example
+import sys
+
+print(f"Python version: {sys.version}")
+
+def greet(name):
+    # インデントガイドが適切な位置にのみ表示されます
+    if name:
+        return f"Hello, {name}!"
+    else:
+        return "Hello!"
+
+print(greet("World"))
+`;
+
     // Elements
     const codeEditor = document.getElementById('codeEditor');
     const codeBackdrop = document.getElementById('codeBackdrop');
     const lineNumbers = document.getElementById('lineNumbers');
+    const indentOverlay = document.getElementById('indentOverlay');
     const previewFrame = document.getElementById('previewFrame');
+    const consoleOutput = document.getElementById('consoleOutput');
     const fileTabBar = document.getElementById('fileTabBar');
-    
+
+    // Pyodide State
+    let pyodide = null;
+    let pyodideReady = false;
+
     // State
     let searchMatches = [];
     let currentMatchIndex = -1;
     let files = []; // Array of file objects
     let activeFileId = null;
-    let currentSidebarMode = 'history'; // 'history' or 'trash'
+    let currentSidebarMode = 'history';
 
-    // --- Window Load ---
-    window.onload = () => {
-        addNewFile('index.html', defaultCode); // This will trigger auto-save init
+    // --- Window Load & Pyodide Init ---
+    window.onload = async () => {
+        addNewFile('index.html', defaultHtml);
         cleanupTrash(); 
         renderSidebarContent();
+        
+        // Pyodide Load
+        try {
+            consoleOutput.textContent = "Python環境(Pyodide)をロード中...";
+            pyodide = await loadPyodide();
+            await pyodide.loadPackage("micropip");
+            pyodideReady = true;
+            consoleOutput.textContent = "Python環境の準備完了。実行できます。";
+            console.log("Pyodide Ready");
+        } catch (e) {
+            consoleOutput.textContent = "Python環境のロードに失敗しました。\n" + e;
+        }
 
-        // サイドバー外クリックで閉じる処理
+        // Sidebar click handler
         document.addEventListener('click', (e) => {
             const sidebar = document.getElementById('historySidebar');
-            // クリックした要素がサイドバー内部でもなく、開閉ボタンそのものでもない場合
             if (sidebar.classList.contains('open') && 
                 !sidebar.contains(e.target) && 
                 !e.target.closest('.toggle-sidebar-btn')) {
@@ -562,22 +731,22 @@
             }
         });
     };
+
     // --- Keyboard Shortcuts ---
     document.addEventListener('keydown', (e) => {
         const ctrl = e.ctrlKey || e.metaKey;
 
         if (ctrl) {
             switch(e.key.toLowerCase()) {
-                case 's': // Save (Now just logs or triggers visual feedback since auto-save is on)
+                case 's': // Save
                     e.preventDefault();
-                    // Optional: Visual flash or toast to confirm save (not strictly needed with auto-save)
                     console.log("Auto-saved");
                     break;
                 case 'f': // Find
                     e.preventDefault();
                     toggleSearchPanel();
                     break;
-                case 'enter': // Preview
+                case 'enter': // Preview / Run
                     e.preventDefault();
                     if (document.getElementById('tabCode').classList.contains('active')) {
                         switchView('preview');
@@ -587,11 +756,7 @@
                     break;
                 case 'z': // Undo
                     e.preventDefault();
-                    if (e.shiftKey) {
-                        redo();
-                    } else {
-                        undo();
-                    }
+                    if (e.shiftKey) redo(); else undo();
                     break;
                 case 'y': // Redo
                     e.preventDefault();
@@ -600,19 +765,18 @@
             }
         }
     });
+
     // --- File Tabs Logic & Undo Stack ---
-    // Added dbId param to link file tab with history entry
     function addNewFile(name, content, dbId = null) {
         const id = Date.now().toString() + Math.random().toString(16).slice(2);
         let initialName = name;
         if (!initialName) {
             const dateStr = new Date().toLocaleString('ja-JP', { month: '2-digit', day: '2-digit', hour:'2-digit', minute:'2-digit' });
-            initialName = `Draft ${dateStr}`;
+            initialName = `Draft ${dateStr}.html`;
         }
         
         const fileContent = content !== undefined ? content : '';
         
-        // Auto-Save: Create History Entry Immediately if new
         let historyId = dbId;
         if (!historyId) {
             historyId = createInitialHistory(initialName, fileContent);
@@ -620,11 +784,11 @@
 
         files.push({ 
             id, 
-            dbId: historyId, // Link to localStorage ID
+            dbId: historyId, 
             name: initialName, 
             content: fileContent,
-            history: [fileContent], // Undo Stack
-            historyIndex: 0          // Stack Pointer
+            history: [fileContent],
+            historyIndex: 0    
         });
 
         switchFile(id);
@@ -642,15 +806,37 @@
         const file = files.find(f => f.id === activeFileId);
         
         codeEditor.value = file ? file.content : '';
-        
+        // Mode detection
+        updateEditorMode(file ? file.name : '');
+
         document.getElementById('searchInput').value = '';
-        highlightSearch(); // This calls syncBackdrop inside
+        highlightSearch();
         updateLineNumbers();
+        updateIndentGuides(); // Trigger indent update
+
         if (document.getElementById('tabPreview').classList.contains('active')) {
             updatePreview();
         }
 
         renderFileTabs();
+    }
+
+    function updateEditorMode(filename) {
+        const label = document.getElementById('currentModeLabel');
+        const pyControls = document.getElementById('pythonControls');
+        const dlSelect = document.getElementById('downloadFormat');
+
+        if (filename.endsWith('.py')) {
+            label.textContent = 'PYTHON';
+            label.className = 'mode-indicator mode-python';
+            pyControls.style.display = 'flex';
+            dlSelect.value = 'py';
+        } else {
+            label.textContent = 'HTML';
+            label.className = 'mode-indicator mode-html';
+            pyControls.style.display = 'none';
+            dlSelect.value = 'html';
+        }
     }
 
     function closeFile(e, id) {
@@ -659,9 +845,6 @@
             alert("最後のタブは閉じられません");
             return;
         }
-        // 確認ダイアログ削除
-        // if (!confirm("タブを閉じますか？（履歴には保存されています）")) return;
-        
         const index = files.findIndex(f => f.id === id);
         files.splice(index, 1);
         if (id === activeFileId) {
@@ -672,16 +855,106 @@
         }
     }
 
+    // Rename triggered from Tab (Double click, Right click, Long press)
     function renameFile(id) {
         const file = files.find(f => f.id === id);
         if(!file) return;
-        const newName = prompt("ファイル名を変更:", file.name);
+        const newName = prompt("ファイル名を変更 (拡張子 .py でPythonモード):", file.name);
         if(newName && newName.trim() !== "") {
             file.name = newName;
             renderFileTabs();
-            // Update History Title
             updateHistoryTitle(file.dbId, newName);
+            // Re-check mode if extension changed
+            if (id === activeFileId) updateEditorMode(newName);
         }
+    }
+
+    // Helper for Long Press Detection
+    function addLongPressEvent(element, callback) {
+        let timer;
+        const delay = 800; // 0.8s for long press
+
+        const start = (e) => {
+            // Only left click or touch
+            if (e.type === 'mousedown' && e.button !== 0) return;
+            element.classList.add('pressing');
+            timer = setTimeout(() => {
+                element.classList.remove('pressing');
+                callback(e);
+            }, delay);
+        };
+
+        const cancel = () => {
+            if (timer) {
+                clearTimeout(timer);
+                element.classList.remove('pressing');
+            }
+        };
+
+        element.addEventListener('mousedown', start);
+        element.addEventListener('touchstart', start, {passive: true});
+        
+        element.addEventListener('mouseup', cancel);
+        element.addEventListener('mouseleave', cancel);
+        element.addEventListener('touchend', cancel);
+        element.addEventListener('touchmove', cancel);
+
+        // Allow external cancellation
+        element.cancelLongPress = cancel;
+    }
+
+    // --- Tab Drag & Drop Logic ---
+    let draggedTabId = null;
+
+    function handleTabDragStart(e, id) {
+        draggedTabId = id;
+        e.dataTransfer.effectAllowed = 'move';
+        e.target.classList.add('dragging');
+        
+        // ★FIX: Cancel any pending long-press to prevent rename prompt
+        if (e.target.cancelLongPress) {
+            e.target.cancelLongPress();
+        }
+    }
+
+    function handleTabDragOver(e) {
+        e.preventDefault(); // Necessary for drop to work
+        e.dataTransfer.dropEffect = 'move';
+        const target = e.target.closest('.file-tab');
+        if (target) {
+            // Remove drag-over from all others
+            document.querySelectorAll('.file-tab').forEach(t => t.classList.remove('drag-over'));
+            target.classList.add('drag-over');
+        }
+    }
+
+    function handleTabDrop(e, targetId) {
+        e.preventDefault();
+        document.querySelectorAll('.file-tab').forEach(t => {
+            t.classList.remove('dragging');
+            t.classList.remove('drag-over');
+        });
+
+        if (draggedTabId === targetId) return;
+
+        const fromIndex = files.findIndex(f => f.id === draggedTabId);
+        const toIndex = files.findIndex(f => f.id === targetId);
+
+        if (fromIndex >= 0 && toIndex >= 0) {
+            // Move existing file object in array
+            const movedFile = files.splice(fromIndex, 1)[0];
+            files.splice(toIndex, 0, movedFile);
+            renderFileTabs();
+        }
+        draggedTabId = null;
+    }
+
+    function handleTabDragEnd(e) {
+        document.querySelectorAll('.file-tab').forEach(t => {
+            t.classList.remove('dragging');
+            t.classList.remove('drag-over');
+        });
+        draggedTabId = null;
     }
 
     function renderFileTabs() {
@@ -691,9 +964,31 @@
         files.forEach(file => {
             const div = document.createElement('div');
             div.className = `file-tab ${file.id === activeFileId ? 'active' : ''}`;
+            div.title = "ダブルクリック/長押し/右クリックで名前変更、ドラッグで並べ替え";
+            
+            // Drag attributes
+            div.draggable = true;
+            div.ondragstart = (e) => handleTabDragStart(e, file.id);
+            div.ondragover = (e) => handleTabDragOver(e);
+            div.ondrop = (e) => handleTabDrop(e, file.id);
+            div.ondragend = (e) => handleTabDragEnd(e);
+
+            // Click to switch
             div.onclick = () => switchFile(file.id);
-            div.ondblclick = () => renameFile(file.id); // Add rename feature
-            div.title = "ダブルクリックで名前変更";
+            
+            // Double Click Rename
+            div.ondblclick = () => renameFile(file.id);
+            
+            // Right Click Rename
+            div.oncontextmenu = (e) => {
+                e.preventDefault();
+                renameFile(file.id);
+                return false;
+            };
+
+            // Long Press Rename
+            addLongPressEvent(div, () => renameFile(file.id));
+
             div.innerHTML = `
                 <span>${escapeHtml(file.name)}</span>
                 <span class="file-tab-close" onclick="closeFile(event, '${file.id}')">✕</span>
@@ -703,7 +998,7 @@
         fileTabBar.appendChild(addBtn);
     }
 
-    // --- Undo / Redo Implementation ---
+    // --- Undo / Redo ---
     let debounceTimer = null;
     function pushHistory(newContent) {
         const file = files.find(f => f.id === activeFileId);
@@ -734,8 +1029,8 @@
         file.content = prevContent;
 
         updateLineNumbers();
+        updateIndentGuides();
         syncBackdrop();
-        // Also trigger auto-save on undo
         triggerAutoSave(file.dbId, prevContent);
     }
 
@@ -749,8 +1044,8 @@
         codeEditor.value = nextContent;
         file.content = nextContent;
         updateLineNumbers();
+        updateIndentGuides();
         syncBackdrop();
-        // Also trigger auto-save on redo
         triggerAutoSave(file.dbId, nextContent);
     }
 
@@ -766,7 +1061,6 @@
         }
     }
     
-    // --- Zen Mode (UI Toggle) ---
     function toggleZenMode() {
         document.body.classList.toggle('zen-mode');
     }
@@ -778,32 +1072,34 @@
         codeBackdrop.scrollTop = top;
         codeBackdrop.scrollLeft = left;
         lineNumbers.scrollTop = top;
+        // Sync indent guides
+        indentOverlay.scrollTop = top;
+        indentOverlay.scrollLeft = left;
     });
-    let autoSaveDebounce = null;
 
+    let autoSaveDebounce = null;
     codeEditor.addEventListener('input', () => {
         const val = codeEditor.value;
         const file = files.find(f => f.id === activeFileId);
         if(file) {
             file.content = val;
-            
-            // Trigger Auto-Save to localStorage
             clearTimeout(autoSaveDebounce);
             autoSaveDebounce = setTimeout(() => {
                 updateHistoryContent(file.dbId, val);
-            }, 1000); // Auto-save 1 second after typing stops
+            }, 1000);
         }
 
         updateLineNumbers();
+        updateIndentGuides(); // Recalculate guides on input
         syncBackdrop();
         if(document.getElementById('searchInput').value) highlightSearch();
 
-        // Undo history
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => {
             pushHistory(val);
         }, 500);
     });
+
     function triggerAutoSave(dbId, content) {
         clearTimeout(autoSaveDebounce);
         updateHistoryContent(dbId, content);
@@ -815,6 +1111,7 @@
             document.execCommand('insertText', false, "  ");
         }
     });
+
     function updateLineNumbers() {
         const lines = codeEditor.value.split('\n').length;
         if (lineNumbers.childElementCount !== lines) {
@@ -822,29 +1119,225 @@
         }
     }
 
+    // --- Smart Indent Guides (New Feature) ---
+    function updateIndentGuides() {
+        const code = codeEditor.value;
+        const lines = code.split('\n');
+        
+        // Simple parser to find leading spaces
+        let html = '';
+        
+        // Tab size assumption: 2 spaces. 
+        const tabSize = 2; 
+
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            const leadingSpaces = line.match(/^ */)[0].length;
+            
+            // Calculate how many guides to draw
+            const guidesCount = Math.floor(leadingSpaces / tabSize);
+            
+            let rowHtml = '<div class="indent-row">';
+            for(let j = 0; j < guidesCount; j++) {
+                rowHtml += '<span class="indent-marker"></span>';
+            }
+            // Fill empty space if line is empty to keep height correct, though indent-row has fixed height
+            rowHtml += '</div>';
+            html += rowHtml;
+        }
+        
+        indentOverlay.innerHTML = html;
+        // Fix scroll
+        indentOverlay.scrollTop = codeEditor.scrollTop;
+        indentOverlay.scrollLeft = codeEditor.scrollLeft;
+    }
+
+
     // --- Syntax Highlight & Backdrop ---
     function syncBackdrop() {
-        // If search is active, don't use Prism (Search highlight takes precedence)
         if (document.getElementById('searchInput').value) return;
         let code = codeEditor.value;
-        // Handle final newline for scrolling sync
-        if (code.endsWith("\n")) {
-            code += " ";
-        }
+        if (code.endsWith("\n")) code += " ";
 
-        // Apply Prism Syntax Highlighting
-        // We wrap in a generic container but Prism.highlight returns HTML string
-        // We use 'html' language grammar
-        const highlighted = Prism.highlight(code, Prism.languages.html, 'html');
+        const file = files.find(f => f.id === activeFileId);
+        const isPython = file && file.name.endsWith('.py');
+
+        const grammar = isPython ? Prism.languages.python : Prism.languages.html;
+        const langName = isPython ? 'python' : 'html';
+
+        const highlighted = Prism.highlight(code, grammar, langName);
         codeBackdrop.innerHTML = highlighted;
     }
 
-    // --- Preview Logic ---
-    function updatePreview() {
-        const doc = previewFrame.contentDocument || previewFrame.contentWindow.document;
-        doc.open();
-        doc.write(codeEditor.value);
-        doc.close();
+    // --- Preview & Python Execution ---
+    async function updatePreview() {
+        const file = files.find(f => f.id === activeFileId);
+        if (!file) return;
+
+        const isPython = file.name.endsWith('.py');
+        const prevFrame = document.getElementById('previewFrame');
+        const consoleOut = document.getElementById('consoleOutput');
+        const prevTitle = document.getElementById('previewTitle');
+        if (isPython) {
+            prevFrame.style.display = 'none';
+            consoleOut.style.display = 'block';
+            prevTitle.textContent = 'Python Console';
+            
+            if (!pyodideReady) {
+                consoleOut.textContent = "Python環境をロード中...";
+                return;
+            }
+
+            consoleOut.textContent = "実行中...\n";
+            consoleOut.className = "";
+            try {
+                pyodide.setStdout({ batched: (msg) => {
+                    consoleOut.textContent += msg + "\n";
+                }});
+                await pyodide.runPythonAsync(codeEditor.value);
+            } catch (err) {
+                consoleOut.textContent += `\nError:\n${err}`;
+                consoleOut.classList.add('error');
+            }
+
+        } else {
+            prevFrame.style.display = 'block';
+            consoleOut.style.display = 'none';
+            prevTitle.textContent = 'Browser Preview';
+            
+            const doc = prevFrame.contentDocument || prevFrame.contentWindow.document;
+            doc.open();
+            doc.write(codeEditor.value);
+            doc.close();
+        }
+    }
+
+    // --- Python Package Management ---
+    function togglePackagePanel() {
+        const panel = document.getElementById('packagePanel');
+        panel.classList.toggle('active');
+        if(panel.classList.contains('active')) {
+            listPackages();
+        }
+    }
+
+    async function installPackage() {
+        const input = document.getElementById('pkgNameInput');
+        const pkg = input.value.trim();
+        if (!pkg || !pyodideReady) return;
+
+        const consoleOut = document.getElementById('consoleOutput');
+        switchView('preview');
+        const file = files.find(f => f.id === activeFileId);
+        if(!file.name.endsWith('.py')) {
+            document.getElementById('previewFrame').style.display = 'none';
+            consoleOut.style.display = 'block';
+        }
+
+        consoleOut.textContent += `\n> Installing ${pkg}...\n`;
+        try {
+            const micropip = pyodide.pyimport("micropip");
+            await micropip.install(pkg);
+            consoleOut.textContent += `Successfully installed ${pkg}!\n`;
+            input.value = '';
+            listPackages(); // refresh list
+        } catch (err) {
+            consoleOut.textContent += `Installation failed: ${err}\n`;
+        }
+    }
+
+    // JSから呼ばれるコールバック
+    function updatePackageListUI(jsonStr) {
+        const packages = JSON.parse(jsonStr);
+        const listContainer = document.getElementById('pkgList');
+        
+        if (packages.length === 0) {
+            listContainer.innerHTML = '<div style="text-align:center; padding:10px; color:#888;">インストール済みパッケージはありません</div>';
+            return;
+        }
+
+        let html = '<ul>';
+        packages.forEach(pkg => {
+            html += `
+                <li>
+                    <span style="font-family:monospace;">${escapeHtml(pkg)}</span>
+                    <button class="icon-btn danger" onclick="deletePackage('${escapeHtml(pkg)}')" title="削除 (アンロード)">✕</button>
+                </li>
+            `;
+        });
+        html += '</ul>';
+        listContainer.innerHTML = html;
+    }
+
+    async function listPackages() {
+        if (!pyodideReady) return;
+        const listContainer = document.getElementById('pkgList');
+        listContainer.innerHTML = '<div style="padding:10px; color:#888;">取得中...</div>';
+
+        try {
+            // Pythonでmicropip.list()を取得し、JSON文字列にしてJSへ渡す
+            await pyodide.runPythonAsync(`
+import micropip
+import js
+import json
+# micropip.list() returns package metadata
+try:
+    pkgs = list(micropip.list().keys())
+    js.updatePackageListUI(json.dumps(pkgs))
+except Exception as e:
+    print(e)
+            `);
+        } catch(e) {
+            listContainer.innerHTML = '<div style="color:red">一覧の取得に失敗しました</div>';
+        }
+    }
+
+    async function deletePackage(pkgName) {
+        if(!confirm(`${pkgName} を削除（メモリからアンロード）しますか？\n注意: 完全な削除には環境リセットが必要です。`)) return;
+        
+        if (!pyodideReady) return;
+        
+        try {
+            // Python: sys.modulesから削除を試みる
+            await pyodide.runPythonAsync(`
+import sys
+import shutil
+import pathlib
+
+pkg = "${pkgName}"
+if pkg in sys.modules:
+    del sys.modules[pkg]
+    print(f"Unloaded {pkg} from sys.modules")
+
+# ファイルシステムのクリーンアップ試行 (site-packages探索)
+# Note: Pyodideの構成によりパスは異なる場合がありますが、標準的な場所を探します
+paths_to_check = sys.path
+removed = False
+for p in paths_to_check:
+    target = pathlib.Path(p) / pkg
+    if target.exists() and target.is_dir():
+        try:
+            shutil.rmtree(target)
+            removed = True
+            print(f"Removed directory: {target}")
+        except:
+            pass
+            
+# メタデータが残るためmicropip.list()からは消えにくいが、UI側で強制的にリスト更新を行う
+            `);
+            
+            // UIを更新
+            alert(`${pkgName} をアンロードしました。`);
+            listPackages();
+
+        } catch(e) {
+            alert("削除中にエラーが発生しました:\n" + e);
+        }
+    }
+
+    function resetPython() {
+        if(!confirm("Python環境をリセット（インストール済みパッケージを全削除）しますか？\nページがリロードされます。")) return;
+        location.reload();
     }
 
     // --- Search Logic ---
@@ -855,7 +1348,7 @@
             document.getElementById('searchInput').focus();
         } else {
             document.getElementById('searchInput').value = '';
-            syncBackdrop(); // Restore syntax highlight
+            syncBackdrop();
         }
     }
 
@@ -868,12 +1361,11 @@
         const text = codeEditor.value;
         
         if (!term) {
-            syncBackdrop(); // Revert to Syntax Highlight
+            syncBackdrop();
             searchMatches = [];
             return;
         }
 
-        // Search highlight overrides syntax highlight for simplicity
         const escapedTerm = escapeHtml(term);
         const regex = new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'); 
         
@@ -911,6 +1403,7 @@
         pushHistory(codeEditor.value);
         highlightSearch(); 
         updateLineNumbers();
+        updateIndentGuides();
         const file = files.find(f => f.id === activeFileId);
         if(file) triggerAutoSave(file.dbId, codeEditor.value);
     }
@@ -923,25 +1416,33 @@
         pushHistory(codeEditor.value);
         highlightSearch();
         updateLineNumbers();
+        updateIndentGuides();
         const file = files.find(f => f.id === activeFileId);
         if(file) triggerAutoSave(file.dbId, codeEditor.value);
     }
 
     function downloadCode() {
-        // 修正点: UTF-8 BOM を先頭に付けてダウンロードすることで Windows のメモ帳等での文字化けを防止
         const format = document.getElementById('downloadFormat').value;
         const content = codeEditor.value;
-        const bom = '\uFEFF'; // UTF-8 BOM
-        const mime = format === 'html' ? 'text/html;charset=utf-8' : 'text/plain;charset=utf-8';
+        const bom = '\uFEFF'; 
+        
+        let mime = 'text/plain;charset=utf-8';
+        if (format === 'html') mime = 'text/html;charset=utf-8';
+        if (format === 'py') mime = 'text/x-python;charset=utf-8';
+
         const blob = new Blob([bom + content], { type: mime });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
         const file = files.find(f => f.id === activeFileId);
         let filename = file ? file.name : `code.${format}`;
+        
         if (!filename.toLowerCase().endsWith(`.${format}`)) {
-            filename = `${filename}.${format}`;
+            const parts = filename.split('.');
+            if (parts.length > 1) parts.pop();
+            filename = parts.join('.') + `.${format}`;
         }
+        
         a.download = filename;
         document.body.appendChild(a);
         a.click();
@@ -949,9 +1450,9 @@
         URL.revokeObjectURL(url);
     }
 
-    // --- History & Trash System (Auto-Save Edition) ---
-    const HISTORY_KEY = 'htmlEditorV2_History';
-    const TRASH_KEY = 'htmlEditorV2_Trash';
+    // --- History & Trash System ---
+    const HISTORY_KEY = 'htmlEditorV4_History';
+    const TRASH_KEY = 'htmlEditorV4_Trash';
     const historySidebar = document.getElementById('historySidebar');
 
     function toggleSidebar() {
@@ -967,7 +1468,6 @@
         document.getElementById('tabTrash').className = `sidebar-tab ${mode === 'trash' ? 'active' : ''}`;
         document.getElementById('sidebarTitle').innerText = mode === 'history' ? '保存履歴' : 'ゴミ箱';
         
-        // 一括削除ボタンのテキスト変更
         const btn = document.getElementById('deleteAllBtn');
         btn.innerText = mode === 'history' ? '一括削除 (ゴミ箱へ)' : 'ゴミ箱を空にする';
         
@@ -995,7 +1495,6 @@
         }
     }
 
-    // Create a new entry immediately
     function createInitialHistory(title, code) {
         const data = getStorageData(HISTORY_KEY);
         const newId = Date.now();
@@ -1012,20 +1511,15 @@
         return newId;
     }
 
-    // Auto-Save: Update existing entry
     function updateHistoryContent(dbId, newCode) {
         if(!dbId) return;
         let data = getStorageData(HISTORY_KEY);
         const item = data.find(i => i.id === dbId);
         if(item) {
             item.code = newCode;
-            item.date = new Date().toISOString(); // Update timestamp
-            // Move to top if updated?
-            // Standard logic usually does.
-            // Remove and unshift to bring to top
+            item.date = new Date().toISOString();
             data = data.filter(i => i.id !== dbId);
             data.unshift(item);
-            
             setStorageData(HISTORY_KEY, data);
             if (historySidebar.classList.contains('open')) renderSidebarContent();
         }
@@ -1041,8 +1535,27 @@
             if (historySidebar.classList.contains('open')) renderSidebarContent();
         }
     }
+    
+    // Rename triggered from Sidebar
+    function renameHistoryItem(dbId) {
+        const data = getStorageData(HISTORY_KEY);
+        const item = data.find(i => i.id === dbId);
+        if (!item) return;
 
-    // Move to Trash
+        const newName = prompt("履歴のファイル名を変更:", item.title);
+        if (newName && newName.trim() !== "") {
+            // Update storage
+            updateHistoryTitle(dbId, newName);
+            // Check if this file is currently open in tabs
+            const openFile = files.find(f => f.dbId === dbId);
+            if (openFile) {
+                openFile.name = newName;
+                renderFileTabs();
+                if (openFile.id === activeFileId) updateEditorMode(newName);
+            }
+        }
+    }
+
     function softDeleteHistory(id) {
         if (!confirm("ゴミ箱に移動しますか？（1週間後に完全削除されます）")) return;
         let history = getStorageData(HISTORY_KEY);
@@ -1056,30 +1569,23 @@
             item.pinned = false; 
             trash.unshift(item);
             setStorageData(TRASH_KEY, trash);
-            // If the deleted file is currently open, close it or alert
-            // Simple approach: do nothing to active tab, but next time it won't sync to history
             renderSidebarContent();
         }
     }
     
-    // Bulk Delete / Empty Trash
     function deleteAllItems() {
         const isTrash = currentSidebarMode === 'trash';
         const msg = isTrash ? "ゴミ箱を完全に空にしますか？この操作は取り消せません。" : "ピン留めされていない履歴をすべてゴミ箱へ移動しますか？";
         
         if (!confirm(msg)) return;
-
         if (isTrash) {
-            // ゴミ箱を空にする
             setStorageData(TRASH_KEY, []);
         } else {
-            // 履歴を一括削除（ピン留め以外）
             let history = getStorageData(HISTORY_KEY);
             let trash = getStorageData(TRASH_KEY);
             
             const pinnedItems = history.filter(i => i.pinned);
             const itemsToDelete = history.filter(i => !i.pinned);
-            
             if (itemsToDelete.length === 0) {
                 alert("削除対象のアイテムがありません");
                 return;
@@ -1089,7 +1595,6 @@
                 item.deletedAt = Date.now();
                 item.pinned = false;
             });
-
             setStorageData(HISTORY_KEY, pinnedItems);
             setStorageData(TRASH_KEY, [...itemsToDelete, ...trash]);
         }
@@ -1138,7 +1643,6 @@
             if (fromTrash) {
                 if(!confirm("ゴミ箱のアイテムです。エディタに読み込みますか？")) return;
             }
-            // Load and link to existing DB ID
             addNewFile(item.title, item.code, item.id);
             if(window.innerWidth < 768) toggleSidebar();
         }
@@ -1153,12 +1657,10 @@
         const storageKey = isTrash ? TRASH_KEY : HISTORY_KEY;
         let data = getStorageData(storageKey);
 
-        // Filter
         if (searchTerm) {
             data = data.filter(item => item.title.toLowerCase().includes(searchTerm));
         }
 
-        // Sort
         data.sort((a, b) => {
             if (!isTrash && a.pinned !== b.pinned) return b.pinned ? 1 : -1;
             if (sortMode === 'dateDesc') return new Date(b.date) - new Date(a.date);
@@ -1186,6 +1688,7 @@
         
             const restoreIcon = `<svg class="icon" viewBox="0 0 24 24"><path d="M14 12c0-1.1-.9-2-2-2s-2 .9-2 2 .9 2 2 2 2-.9 2-2zm-2-9c-4.97 0-9 4.03-9 9H0l4 4 4-4H5c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.51 0-2.91-.49-4.06-1.3l-1.42 1.44C8.04 20.3 9.94 21 12 21c4.97 0 9-4.03 9-9s-4.03-9-9-9z"/></svg>`;
             const deleteForeverIcon = `<svg class="icon" viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>`;
+            const editIcon = `<svg class="icon" viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>`;
             let buttonsHtml = '';
             if (isTrash) {
                 buttonsHtml = `
@@ -1194,6 +1697,7 @@
                 `;
             } else {
                 buttonsHtml = `
+                    <button class="icon-btn" onclick="event.stopPropagation(); renameHistoryItem(${item.id})" title="名前変更">${editIcon}</button>
                     <button class="icon-btn ${item.pinned ? 'active' : ''}" onclick="event.stopPropagation(); togglePin(${item.id})" title="ピン留め">${pinIcon}</button>
                     <button class="icon-btn danger" onclick="event.stopPropagation(); softDeleteHistory(${item.id})" title="削除（ゴミ箱へ）">${trashIcon}</button>
                 `;
