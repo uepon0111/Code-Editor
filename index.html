@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Advanced Editor v4.4 (Home & Persistence)</title>
+    <title>Advanced Editor v4.5 (External Preview)</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-html.min.js"></script>
@@ -269,18 +269,19 @@
         }
         
         /* Prism overrides */
-        pre[class*="language-"] { margin: 0; padding: 0; background: transparent; overflow: visible; }
+        pre[class*="language-"] { margin: 0;
+            padding: 0; background: transparent; overflow: visible; }
         code[class*="language-"] { white-space: pre; }
 
         /* --- 修正: 検索ハイライトの視認性向上 --- */
         .backdrop mark {
             background-color: rgba(255, 215, 0, 0.4);
-            color: inherit; /* 修正: 文字色を透明にせず継承する */
+            color: inherit;
             border-radius: 2px;
         }
         .backdrop mark.current {
             background-color: #ff8c00;
-            color: white; /* 修正: 選択中は白文字で見やすく */
+            color: white;
             border: 1px solid orange;
         }
 
@@ -325,9 +326,11 @@
             border: none;
             background-color: white;
             flex: 1;
+            /* 新しいタブで開くため、UI上では非表示にする場合もありますが、
+               プレビュータブのレイアウト保持のため残しています */
         }
         
-        /* Python Console Output */
+        /* Python Console Output (Deprecated in View, used for init logs) */
         #consoleOutput {
             display: none;
             flex: 1;
@@ -575,6 +578,17 @@
             overflow-y: auto;
             flex: 1;
         }
+        
+        /* New style for external preview hint */
+        .preview-placeholder {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #888;
+            background: #f9f9f9;
+        }
     </style>
 </head>
 <body>
@@ -582,7 +596,7 @@
 <div id="homeScreen">
     <div class="home-container">
         <div class="home-header">
-            <h1>Advanced Editor v4.4</h1>
+            <h1>Advanced Editor v4.5</h1>
             <p style="color:#888;">HTML / Python Web Editor with Persistence</p>
         </div>
 
@@ -720,7 +734,7 @@
 
     <div id="viewPreview" class="view-section">
         <div class="toolbar" style="background: #f0f0f0; border-bottom: 1px solid #ccc; color: #333;">
-            <strong id="previewTitle">Preview</strong>
+            <strong id="previewTitle">Preview Launcher</strong>
             
             <div style="margin-left: auto; display: flex; gap: 5px;">
                 <button onclick="toggleZenMode()" class="secondary" title="ヘッダーやタブを非表示">
@@ -733,7 +747,15 @@
             </div>
         </div>
         
-        <iframe id="previewFrame"></iframe>
+        <div class="preview-placeholder">
+            <svg class="icon" viewBox="0 0 24 24" style="width:64px; height:64px; color:#ccc; margin-bottom:20px;">
+                <path d="M19 19H5V5h7V3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/>
+            </svg>
+            <p>結果は新しいタブ（ウィンドウ）で表示されます。</p>
+            <p>右上の「実行/更新」ボタンを押すか、<b>Ctrl + Enter</b> キーを押してください。</p>
+        </div>
+        
+        <iframe id="previewFrame" style="display:none;"></iframe>
         <pre id="consoleOutput">Python環境を準備中...</pre>
     </div>
 
@@ -1045,10 +1067,9 @@
         updateLineNumbers();
         updateIndentGuides(); // Trigger indent update
 
-        if (document.getElementById('tabPreview').classList.contains('active')) {
-            updatePreview();
-        }
-
+        // プレビュータブにいても、実行はボタンを押したときのみにするため
+        // ここでのupdatePreview呼び出しは削除しました
+        
         renderFileTabs();
     }
 
@@ -1337,9 +1358,6 @@
         
         document.getElementById('viewCode').classList.toggle('active', mode === 'code');
         document.getElementById('viewPreview').classList.toggle('active', mode === 'preview');
-        if (mode === 'preview') {
-            updatePreview();
-        }
     }
     
     function toggleZenMode() {
@@ -1444,59 +1462,95 @@
         codeBackdrop.innerHTML = highlighted;
     }
 
-    // --- Preview & Python Execution ---
+    // --- Preview & Python Execution (External Window Version) ---
     async function updatePreview() {
         const file = files.find(f => f.id === activeFileId);
         if (!file) return;
 
         const isPython = file.name.endsWith('.py');
-        const prevFrame = document.getElementById('previewFrame');
-        const consoleOut = document.getElementById('consoleOutput');
         const prevTitle = document.getElementById('previewTitle');
+        
+        // Open a new window
+        const win = window.open('', '_blank');
+        if (!win) {
+            alert("ポップアップがブロックされました。ブラウザの設定で許可してください。");
+            return;
+        }
+
         if (isPython) {
-            prevFrame.style.display = 'none';
-            consoleOut.style.display = 'block';
-            prevTitle.textContent = 'Python Console';
+            prevTitle.textContent = 'Python Running in New Window...';
             
+            // Set up basic style for Python console in new window
+            win.document.write(`
+                <html>
+                <head>
+                    <title>Python Console Output</title>
+                    <style>
+                        body { background-color: #0c0c0c; color: #eee; font-family: 'Consolas', 'Monaco', monospace; padding: 20px; }
+                        #output { white-space: pre-wrap; font-size: 14px; }
+                        .error { color: #ff6b6b; }
+                    </style>
+                </head>
+                <body>
+                    <div id="output">Running Python code...</div>
+                </body>
+                </html>
+            `);
+            win.document.close();
+
             if (!pyodideReady) {
-                consoleOut.textContent = "Python環境をロード中...";
+                if(win.document.getElementById('output')) 
+                    win.document.getElementById('output').textContent = "Python環境をロード中...しばらくお待ちください。";
                 return;
             }
 
-            consoleOut.textContent = "実行中...\n";
-            consoleOut.className = "";
+            const appendLog = (msg, isError = false) => {
+                if (win.closed) return;
+                const outDiv = win.document.getElementById('output');
+                if (outDiv) {
+                    // Initial "Running..." text cleanup on first real log
+                    if (outDiv.textContent === 'Running Python code...') outDiv.textContent = '';
+                    
+                    const span = win.document.createElement('span');
+                    if (isError) span.className = 'error';
+                    span.textContent = msg + "\n";
+                    outDiv.appendChild(span);
+                    win.scrollTo(0, win.document.body.scrollHeight);
+                }
+            };
+
+            appendLog("実行開始...\n");
+
             try {
+                // Redirect Stdout to the new window
                 pyodide.setStdout({ batched: (msg) => {
-                    consoleOut.textContent += msg + "\n";
+                    appendLog(msg);
                 }});
 
-                // --- 変更点: 不足しているパッケージを自動インストール ---
-                consoleOut.textContent += "ライブラリの依存関係を確認中...\n";
+                appendLog("ライブラリの依存関係を確認中...\n");
                 await pyodide.loadPackagesFromImports(codeEditor.value, {
                     messageCallback: (msg) => {
-                        consoleOut.textContent += `[Auto-Install] ${msg}\n`;
+                        appendLog(`[Auto-Install] ${msg}`);
                     },
                     errorCallback: (err) => {
-                        consoleOut.textContent += `[Auto-Install Error] ${err}\n`;
+                        appendLog(`[Auto-Install Error] ${err}`, true);
                     }
                 });
-                // ----------------------------------------------------
 
                 await pyodide.runPythonAsync(codeEditor.value);
+                appendLog("\n--- 実行完了 ---");
             } catch (err) {
-                consoleOut.textContent += `\nError:\n${err}`;
-                consoleOut.classList.add('error');
+                appendLog(`\nError:\n${err}`, true);
             }
 
         } else {
-            prevFrame.style.display = 'block';
-            consoleOut.style.display = 'none';
-            prevTitle.textContent = 'Browser Preview';
+            // HTML Mode
+            prevTitle.textContent = 'HTML Preview Opened';
             
-            const doc = prevFrame.contentDocument || prevFrame.contentWindow.document;
-            doc.open();
-            doc.write(codeEditor.value);
-            doc.close();
+            // Write HTML content directly to the new window
+            win.document.open();
+            win.document.write(codeEditor.value);
+            win.document.close();
         }
     }
 
@@ -1520,7 +1574,7 @@
             const micropip = pyodide.pyimport("micropip");
             for (const pkg of savedPkgs) {
                  await micropip.install(pkg);
-                 console.log(`Restored package: ${pkg}`);
+                console.log(`Restored package: ${pkg}`);
             }
             consoleOut.textContent += `パッケージの復元が完了しました。\n`;
         } catch (err) {
@@ -1533,19 +1587,18 @@
         const pkg = input.value.trim();
         if (!pkg || !pyodideReady) return;
 
+        // Install uses the internal console for feedback to avoid opening windows for just installs
         const consoleOut = document.getElementById('consoleOutput');
-        switchView('preview');
-        const file = files.find(f => f.id === activeFileId);
-        if(!file.name.endsWith('.py')) {
-            document.getElementById('previewFrame').style.display = 'none';
-            consoleOut.style.display = 'block';
-        }
+        // Show console temporarily in sidebar/preview area if needed, 
+        // but here we just log to the hidden element or use alert if it fails.
+        // Better UX: Show a notification. For now, logging to console log.
+        console.log(`Installing ${pkg}...`);
 
-        consoleOut.textContent += `\n> Installing ${pkg}...\n`;
         try {
             const micropip = pyodide.pyimport("micropip");
             await micropip.install(pkg);
-            consoleOut.textContent += `Successfully installed ${pkg}!\n`;
+            console.log(`Successfully installed ${pkg}!`);
+            alert(`${pkg} のインストールが完了しました。`);
             
             // Persist
             const savedPkgs = getStorageData(PKG_KEY);
@@ -1558,7 +1611,8 @@
             listPackages();
             // refresh list
         } catch (err) {
-            consoleOut.textContent += `Installation failed: ${err}\n`;
+            console.error(`Installation failed: ${err}`);
+            alert(`インストール失敗: ${err}`);
         }
     }
 
